@@ -6,14 +6,20 @@ const reminderEntity = 1;
 const fullAccess = 3;
 const frequencies = { daily: 0, weekly: 1, monthly: 2, yearly: 3 };
 
+// Every date in the text, in order. Remind combines them, so "today" and "at 5" can come apart.
 function detect(text) {
   const detector = $.NSDataDetector.dataDetectorWithTypesError(8, null);
-  const match = detector.firstMatchInStringOptionsRange($(text), 0, { location: 0, length: text.length });
-  if (match.isNil()) return { date: null, matched: null };
-  // Struct fields arrive here as strings ("0"), so convert them to numbers.
-  const start = Number(match.range.location);
-  const length = Number(match.range.length);
-  return { date: Number(match.date.timeIntervalSince1970) * 1000, matched: text.substr(start, length) };
+  const matches = detector.matchesInStringOptionsRange($(text), 0, { location: 0, length: text.length });
+  const found = [];
+  for (let index = 0; index < matches.count; index++) {
+    const match = matches.objectAtIndex(index);
+    if (match.date.isNil()) continue;
+    // Struct fields arrive here as strings ("0"), so convert them to numbers.
+    const start = Number(match.range.location);
+    const length = Number(match.range.length);
+    found.push({ date: Number(match.date.timeIntervalSince1970) * 1000, matched: text.substr(start, length) });
+  }
+  return found;
 }
 
 // The script helper can't ask for access, so it needs access granted already.

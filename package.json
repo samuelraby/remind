@@ -15,7 +15,7 @@
   "commands": [
     {
       "name": "remind",
-      "title": "Remind",
+      "title": "Create Reminder",
       "description": "Create a reminder.",
       "mode": "view",
       "preferences": [

@@ -1,4 +1,4 @@
-// Finds the date in a reminder, lists Reminders lists, and adds reminders. Prints JSON.
+// Finds the dates in a reminder, lists Reminders lists, and adds reminders. Prints JSON.
 // Usage: remind-helper detect <text>
 //        remind-helper lists
 //        remind-helper add <json>
@@ -6,8 +6,8 @@ import EventKit
 import Foundation
 
 struct Detection: Encodable {
-    let date: Double?
-    let matched: String?
+    let date: Double
+    let matched: String
 }
 
 struct ReminderList: Encodable {
@@ -40,11 +40,15 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
+// Every date in the text, in order. Remind combines them, so "today" and "at 5" can come apart.
 func detect(_ text: String) {
     let detector = try! NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue)
-    let match = detector.firstMatch(in: text, range: NSRange(text.startIndex..., in: text))
-    let matched = match.flatMap { Range($0.range, in: text) }.map { String(text[$0]) }
-    emit(Detection(date: match?.date.map { $0.timeIntervalSince1970 * 1000 }, matched: matched))
+    let found = detector.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap {
+        match -> Detection? in
+        guard let date = match.date, let range = Range(match.range, in: text) else { return nil }
+        return Detection(date: date.timeIntervalSince1970 * 1000, matched: String(text[range]))
+    }
+    emit(found)
 }
 
 // Asks once, then needs full access. The answer can arrive on the main queue, so the run loop keeps turning.

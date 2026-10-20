@@ -15,11 +15,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { useEffect, useRef, useState } from "react";
-
-interface Detection {
-  date: number | null;
-  matched: string | null;
-}
+import { Match, when } from "./when";
 
 interface ReminderList {
   id: string;
@@ -60,10 +56,10 @@ const toolchains = [
 const buildScript = 't="$4.building"; "$1" -sdk "$2" -O "$3" -o "$t" && mv -f "$t" "$4" && printf %s "$5" > "$4.source-hash"';
 
 const titleInstructions =
-  "Write a short title for this reminder. Keep the person's own words. Leave out the date and time. Put any other detail in notes, or leave notes empty.";
+  "Tidy this reminder title. Keep the person's own words and don't add any. Notes are only for detail like a phone number, address or link; otherwise leave notes empty.";
 
 // Dates go stale ("tomorrow"), so detections are kept only while Remind is open.
-const detections = new Map<string, Detection>();
+const detections = new Map<string, Match[]>();
 let sourceHash: string | undefined;
 let fastHelperReady = false;
 let fastHelperBroken = false;
@@ -143,34 +139,17 @@ async function helper(args: string[], timeout = 5000): Promise<string> {
   return run("/usr/bin/osascript", ["-l", "JavaScript", asset("remind-helper.js"), ...args], timeout + 5000);
 }
 
-async function detect(text: string): Promise<Detection> {
+async function detect(text: string): Promise<Match[]> {
   const known = detections.get(text);
   if (known) return known;
-  const detection = JSON.parse(await helper(["detect", text])) as Detection;
-  detections.set(text, detection);
-  return detection;
+  const found = JSON.parse(await helper(["detect", text])) as Match[];
+  detections.set(text, found);
+  return found;
 }
 
-const leftoverWords = "on|at|by|for|in|due|before|this|next";
-const leadingLeftovers = new RegExp(`^(?:(?:${leftoverWords})\\s+)+`, "i");
-const trailingLeftovers = new RegExp(`(?:\\s+(?:${leftoverWords}))+$`, "i");
-
-// The text without the date, and without the small words the date leaves behind.
-function titleWithout(text: string, matched: string | null): string {
-  const rest = (matched ? text.replace(matched, " ") : text).replace(/\s+/g, " ").trim();
-  return rest.replace(leadingLeftovers, "").replace(trailingLeftovers, "").trim() || text.trim();
-}
-
-// The date detector always returns a time, so a time counts only when the words name one.
-const namedTime = /\d\s*(?:am|pm|a\.m\.|p\.m\.)|\d:\d{2}|\bat\s+\d|\b(?:noon|midnight|morning|afternoon|evening|tonight)\b/i;
-
-function draftFor(text: string, detection: Detection): Draft {
-  return {
-    text,
-    title: titleWithout(text, detection.matched),
-    date: detection.date === null ? null : new Date(detection.date),
-    hasTime: detection.date !== null && namedTime.test(detection.matched ?? ""),
-  };
+function draftFor(text: string, matches: Match[]): Draft {
+  const { title, date, hasTime } = when(text, matches);
+  return { text, title, date: date === null ? null : new Date(date), hasTime };
 }
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -227,15 +206,15 @@ function Review({ draft }: { draft: Draft }) {
   const [isWriting, setIsWriting] = useState(appleIntelligence);
   const [isLoadingLists, setIsLoadingLists] = useState(showList);
   const [isAdding, setIsAdding] = useState(false);
+  // All-day when the words name a day without a time, the way Calendar does it.
+  const [allDay, setAllDay] = useState(draft.date !== null && !draft.hasTime);
   const titleEdited = useRef(false);
   const notesEdited = useRef(false);
-  // Date only when the words name a day without a time; otherwise the picker offers a time too.
-  const withTime = draft.hasTime || draft.date === null;
 
   useEffect(() => {
     if (!appleIntelligence) return;
     let isCurrent = true;
-    writeTitle(draft.text)
+    writeTitle(draft.title)
       .then((answer) => {
         if (!isCurrent) return;
         if (answer.title && !titleEdited.current) setTitle(answer.title);
@@ -283,7 +262,7 @@ function Review({ draft }: { draft: Draft }) {
       notes: showNotes ? notes.trim() : "",
       listId: showList ? listId : "",
       due: date ? date.getTime() : null,
-      hasTime: Boolean(date) && withTime,
+      hasTime: Boolean(date) && !allDay,
       priority: Number(values.priority ?? 0),
       alertMinutes: Number(values.alert ?? 0),
       recurrence: values.repeat ?? "never",
@@ -320,10 +299,11 @@ function Review({ draft }: { draft: Draft }) {
       <Form.DatePicker
         id="date"
         title="Date"
-        type={withTime ? Form.DatePicker.Type.DateTime : Form.DatePicker.Type.Date}
+        type={allDay ? Form.DatePicker.Type.Date : Form.DatePicker.Type.DateTime}
         value={date}
         onChange={setDate}
       />
+      <Form.Checkbox id="allDay" label="All-Day" value={allDay} onChange={setAllDay} />
       {showList ? (
         <Form.Dropdown id="list" title="List" value={listId} onChange={setListId}>
           {lists.map((list) => (
@@ -350,7 +330,7 @@ function Review({ draft }: { draft: Draft }) {
           <Form.Dropdown.Item value="1" title="High" />
         </Form.Dropdown>
       ) : null}
-      {showEarlyAlert && withTime ? (
+      {showEarlyAlert && !allDay ? (
         <Form.Dropdown id="alert" title="Early Alert" defaultValue="0">
           <Form.Dropdown.Item value="0" title="None" />
           <Form.Dropdown.Item value="5" title="5 minutes before" />
