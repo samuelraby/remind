@@ -1,21 +1,16 @@
 {
   "required": [
-    "title",
-    "notes"
+    "title"
   ],
   "additionalProperties": false,
   "properties": {
     "title": {
       "type": "string"
-    },
-    "notes": {
-      "type": "string"
     }
   },
   "title": "Reminder",
   "x-order": [
-    "title",
-    "notes"
+    "title"
   ],
   "type": "object"
 }

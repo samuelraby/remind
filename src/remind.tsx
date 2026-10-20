@@ -58,8 +58,30 @@ const toolchains = [
 // Compiles, renames and stamps in one step, so it finishes even if the window closes first.
 const buildScript = 't="$4.building"; "$1" -sdk "$2" -O "$3" -o "$t" && mv -f "$t" "$4" && printf %s "$5" > "$4.source-hash"';
 
-const titleInstructions =
-  "Tidy this reminder title. Keep the person's own words and don't add any. Notes are only for detail like a phone number, address or link; otherwise leave notes empty.";
+// Written to Apple's guidance for the on-device model: a role, one direct task, simple examples,
+// and the key rule repeated last. Notes are left out entirely when the Notes field is off.
+function titleInstructions(withNotes: boolean): string {
+  const examples = [
+    ["get coffee", "Get coffee", ""],
+    ["pick up dry cleaning", "Pick up dry cleaning", ""],
+    ["review slides after 's meeting", "Review slides after meeting", ""],
+    ["call the dentist 555 123 4567", "Call the dentist", "555 123 4567"],
+    ["send the deck to the team https://example.com/deck", "Send the deck to the team", "https://example.com/deck"],
+  ].filter(([, , notes]) => withNotes || !notes);
+  const shown = examples.map(([text, title, notes]) =>
+    withNotes ? `${text} → {title: "${title}", notes: "${notes}"}` : `${text} → {title: "${title}"}`,
+  );
+  return [
+    "You are an expert at writing reminders. Rewrite the person's text as a short reminder title.",
+    "Start with a capital letter. Keep their words in their order. Remove only words that no longer make sense.",
+    ...(withNotes ? ["Move a phone number, address or link to notes. Otherwise leave notes empty."] : []),
+    "",
+    "Examples:",
+    ...shown,
+    "",
+    "Do not add words the person didn't write.",
+  ].join("\n");
+}
 
 // Dates go stale ("tomorrow"), so detections are kept only while Remind is open.
 const detections = new Map<string, Match[]>();
@@ -177,10 +199,10 @@ function fmError(output: string): string {
 }
 
 // Asks the on-device model for a title and notes. The text is prefixed so it never reads as an option.
-function writeTitle(text: string): Promise<{ title: string; notes: string }> {
+function writeTitle(text: string, withNotes: boolean): Promise<{ title: string; notes: string }> {
   if (!existsSync(fm)) return Promise.reject(new Error("Apple Intelligence in Remind needs macOS 27 or later."));
-  const args = ["respond", "--greedy", "--no-stream", "--instructions", titleInstructions];
-  args.push("--schema", asset("title-schema.json"), `Reminder: ${text}`);
+  const args = ["respond", "--greedy", "--no-stream", "--instructions", titleInstructions(withNotes)];
+  args.push("--schema", asset(withNotes ? "title-notes-schema.json" : "title-schema.json"), `Text: ${text}`);
   return new Promise((resolve, reject) =>
     execFile(fm, args, { timeout: 15000 }, (error, stdout, stderr) => {
       if (error) return reject(new Error(fmError(String(stderr ?? "") || error.message)));
@@ -188,7 +210,7 @@ function writeTitle(text: string): Promise<{ title: string; notes: string }> {
       try {
         const answer = JSON.parse(output.slice(output.indexOf("{"), output.lastIndexOf("}") + 1));
         const title = String(answer.title ?? "")
-          .replace(/^reminder:\s*/i, "")
+          .replace(/^(?:reminder|text):\s*/i, "")
           .trim();
         resolve({ title, notes: String(answer.notes ?? "").trim() });
       } catch {
@@ -217,7 +239,7 @@ function Review({ draft }: { draft: Draft }) {
   useEffect(() => {
     if (!appleIntelligence) return;
     let isCurrent = true;
-    writeTitle(draft.title)
+    writeTitle(draft.title, showNotes)
       .then((answer) => {
         if (!isCurrent) return;
         if (answer.title && !titleEdited.current) setTitle(answer.title);
