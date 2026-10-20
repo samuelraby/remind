@@ -1,12 +1,15 @@
 import {
   Action,
   ActionPanel,
+  closeMainWindow,
   environment,
   Form,
   getPreferenceValues,
   Icon,
+  LaunchProps,
   List,
   popToRoot,
+  showHUD,
   showToast,
   Toast,
 } from "@raycast/api";
@@ -269,8 +272,9 @@ function Review({ draft }: { draft: Draft }) {
     };
     try {
       await helper(["add", JSON.stringify(reminder)], 60000);
-      await showToast({ title: "Reminder Added" });
       await popToRoot({ clearSearchBar: true });
+      await closeMainWindow({ clearRootSearch: true });
+      await showHUD("Reminder Added");
     } catch (failure) {
       await showToast({ style: Toast.Style.Failure, title: "Reminder Not Added", message: (failure as Error).message });
     } finally {
@@ -353,7 +357,28 @@ function Review({ draft }: { draft: Draft }) {
   );
 }
 
-export default function Command() {
+// Opened from root search with text, Remind goes straight to the review form.
+function FromText({ text }: { text: string }) {
+  const [draft, setDraft] = useState<Draft | null>(null);
+
+  useEffect(() => {
+    detect(text)
+      .then((matches) => setDraft(draftFor(text, matches)))
+      .catch((failure: Error) => {
+        setDraft({ text, title: text, date: null, hasTime: false });
+        showToast({ style: Toast.Style.Failure, title: "Date Unavailable", message: failure.message });
+      });
+  }, []);
+
+  return draft ? <Review draft={draft} /> : <Form isLoading />;
+}
+
+export default function Command(props: LaunchProps) {
+  const fallbackText = props.fallbackText?.trim();
+  return fallbackText ? <FromText text={fallbackText} /> : <Search />;
+}
+
+function Search() {
   const [searchText, setSearchText] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [isLoading, setIsLoading] = useState(false);
