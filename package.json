@@ -1,0 +1,85 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "remind",
+  "title": "Remind",
+  "description": "Create a reminder with the macOS date detector and Apple Intelligence. Works offline.",
+  "icon": "icon.png",
+  "author": "samuel",
+  "categories": [
+    "Productivity"
+  ],
+  "license": "MIT",
+  "platforms": [
+    "macOS"
+  ],
+  "commands": [
+    {
+      "name": "remind",
+      "title": "Remind",
+      "description": "Create a reminder.",
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "appleIntelligence",
+          "title": "Apple Intelligence",
+          "label": "Use Apple Intelligence",
+          "description": "Writes titles with the on-device model.",
+          "type": "checkbox",
+          "default": true
+        },
+        {
+          "name": "showList",
+          "title": "List",
+          "label": "Show List",
+          "description": "Shows the List field.",
+          "type": "checkbox",
+          "default": true
+        },
+        {
+          "name": "showNotes",
+          "title": "Notes",
+          "label": "Show Notes",
+          "description": "Shows the Notes field.",
+          "type": "checkbox",
+          "default": true
+        },
+        {
+          "name": "showPriority",
+          "title": "Priority",
+          "label": "Show Priority",
+          "description": "Shows the Priority field.",
+          "type": "checkbox",
+          "default": false
+        },
+        {
+          "name": "showEarlyAlert",
+          "title": "Early Alert",
+          "label": "Show Early Alert",
+          "description": "Shows the Early Alert field for reminders with a time.",
+          "type": "checkbox",
+          "default": false
+        },
+        {
+          "name": "showRepeat",
+          "title": "Repeat",
+          "label": "Show Repeat",
+          "description": "Shows the Repeat field.",
+          "type": "checkbox",
+          "default": false
+        }
+      ]
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^2.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
+    "typescript": "^6.0.3"
+  },
+  "scripts": {
+    "build": "ray build -e dist -o build",
+    "package": "sh scripts/package.sh"
+  }
+}

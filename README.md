@@ -16,15 +16,14 @@ Type a reminder, like "pick up dry cleaning friday at 5", and Remind shows the d
 
 ### Settings
 
-| Setting            | Default | Description                              |
-| ------------------ | ------- | ---------------------------------------- |
-| Apple Intelligence | On      | Writes titles with the on-device model.  |
-| List               | On      | Shows the List field.                    |
-| Notes              | On      | Shows the Notes field.                   |
-| Priority           | Off     | Shows the Priority field.                |
-| Flag               | Off     | Shows the Flag field.                    |
-| Early Alert        | Off     | Shows the Early Alert field.             |
-| Repeat             | Off     | Shows the Repeat field.                  |
+| Setting            | Default | Description                                            |
+| ------------------ | ------- | ------------------------------------------------------ |
+| Apple Intelligence | On      | Writes titles with the on-device model.                |
+| List               | On      | Shows the List field.                                  |
+| Notes              | On      | Shows the Notes field.                                 |
+| Priority           | Off     | Shows the Priority field.                              |
+| Early Alert        | Off     | Shows the Early Alert field for reminders with a time. |
+| Repeat             | Off     | Shows the Repeat field.                                |
 
 ### Apple Intelligence
 
