@@ -43,7 +43,7 @@ When Apple Intelligence is off, Remind uses your text as the title, without the 
 1. Download **Remind.zip** from Releases and unzip it.
 2. In Tinycast, open **Settings › Extensions**.
 3. Click **Add from folder** and choose the **Remind** folder.
-4. Open **Remind** in Tinycast. When macOS asks for access to Reminders, click **Allow**.
+4. Open **Remind** in Tinycast.
 
 Tinycast keeps its own copy, so you can delete the download afterward.
 
