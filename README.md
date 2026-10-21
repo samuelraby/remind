@@ -33,14 +33,14 @@ If Remind doesn't appear when you type **remind**, turn on **Show in launcher** 
 
 ### Settings
 
-| Setting            | Default | Description                                            |
-| ------------------ | ------- | ------------------------------------------------------ |
-| Apple Intelligence | On      | Writes titles with the on-device model.                |
-| List               | On      | Shows the List field.                                  |
-| Notes              | On      | Shows the Notes field.                                 |
-| Priority           | Off     | Shows the Priority field.                              |
-| Early Alert        | Off     | Shows the Early Alert field for reminders with a time. |
-| Repeat             | Off     | Shows the Repeat field.                                |
+| Setting            | Default | Description                                                         |
+| ------------------ | ------- | ------------------------------------------------------------------- |
+| Apple Intelligence | On      | Writes titles with the on-device model.                             |
+| List               | On      | Shows the List field when you review a reminder.                    |
+| Notes              | On      | Shows the Notes field when you review a reminder.                   |
+| Priority           | Off     | Shows the Priority field when you review a reminder.                |
+| Early Alert        | Off     | Shows the Early Alert field when you review a reminder with a time. |
+| Repeat             | Off     | Shows the Repeat field when you review a reminder.                  |
 
 ### Apple Intelligence
 
