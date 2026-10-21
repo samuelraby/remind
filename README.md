@@ -123,7 +123,7 @@ Remind uses the on-device Apple Foundation Model only when the rules above can't
 | Rewrite the title            | The title reads badly after step 3.                               | About a second |
 | Correct spelling and grammar | Spelling and Grammar is on. Runs on every title.                  | About a second |
 
-They run together on the review screen, never while you type, and the screen shows a loading bar until they finish. They never change the date, the time or your notes. Everything else opens instantly.
+They run together on the review screen, never while you type. They never change the date, the time or your notes. Everything else opens instantly.
 
 Requires macOS 27 with Apple Intelligence turned on. Run this once to accept the Foundation Models terms:
 
