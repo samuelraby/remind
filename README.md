@@ -8,6 +8,8 @@ Create a reminder without leaving the keyboard. Remind is a [Tinycast](https://g
 
 Type a reminder, like "pick up dry cleaning friday at 5", and Remind shows the date as you type. Press ↵ to review the reminder before it's added.
 
+To add it to a list, name the list: "on my Work list", "to Groceries" or "Work list". The list has to exist in Reminders.
+
 | Shortcut | Action              |
 | -------- | ------------------- |
 | ↵        | Review the reminder |

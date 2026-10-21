@@ -1,6 +1,7 @@
 import {
   Action,
   ActionPanel,
+  Cache,
   closeMainWindow,
   environment,
   Form,
@@ -18,6 +19,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { useEffect, useRef, useState } from "react";
+import { findList } from "./list";
 import { Match, when } from "./when";
 
 interface ReminderList {
@@ -31,6 +33,7 @@ interface Draft {
   title: string;
   date: Date | null;
   hasTime: boolean;
+  listId: string | null;
 }
 
 interface FormValues {
@@ -172,9 +175,51 @@ async function detect(text: string): Promise<Match[]> {
   return found;
 }
 
-function draftFor(text: string, matches: Match[]): Draft {
-  const { title, date, hasTime } = when(text, matches);
-  return { text, title, date: date === null ? null : new Date(date), hasTime };
+function draftFor(text: string, matches: Match[], lists: ReminderList[]): Draft {
+  const list = findList(text, lists);
+  const { title, date, hasTime } = when(list ? text.replace(list.text, " ") : text, matches);
+  return { text, title, date: date === null ? null : new Date(date), hasTime, listId: list?.id ?? null };
+}
+
+// Lists change rarely, so the last ones seen show at once while a fresh copy loads behind them.
+const listCache = new Cache({ namespace: "lists" });
+let listsLoading: Promise<ReminderList[]> | null = null;
+
+function cachedLists(): ReminderList[] {
+  try {
+    return JSON.parse(listCache.get("lists") ?? "[]") as ReminderList[];
+  } catch {
+    return [];
+  }
+}
+
+function loadLists(): Promise<ReminderList[]> {
+  listsLoading ??= helper(["lists"], 60000)
+    .then((output) => {
+      listCache.set("lists", output);
+      return JSON.parse(output) as ReminderList[];
+    })
+    .finally(() => {
+      listsLoading = null;
+    });
+  return listsLoading;
+}
+
+function useLists(): { lists: ReminderList[]; failure: string | null; isLoading: boolean } {
+  const [lists, setLists] = useState<ReminderList[]>(cachedLists);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  useEffect(() => {
+    let isCurrent = true;
+    loadLists()
+      .then((found) => isCurrent && setLists(found))
+      .catch((error: Error) => isCurrent && setFailure(error.message))
+      .finally(() => isCurrent && setIsLoading(false));
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+  return { lists, failure, isLoading };
 }
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -226,10 +271,9 @@ function Review({ draft }: { draft: Draft }) {
   const [title, setTitle] = useState(draft.title);
   const [notes, setNotes] = useState("");
   const [date, setDate] = useState<Date | null>(draft.date);
-  const [lists, setLists] = useState<ReminderList[]>([]);
-  const [listId, setListId] = useState("");
+  const { lists, failure: listFailure, isLoading: isLoadingLists } = useLists();
+  const [listId, setListId] = useState(draft.listId ?? "");
   const [isWriting, setIsWriting] = useState(appleIntelligence);
-  const [isLoadingLists, setIsLoadingLists] = useState(showList);
   const [isAdding, setIsAdding] = useState(false);
   // All-day when the words name a day without a time, the way Calendar does it.
   const [allDay, setAllDay] = useState(draft.date !== null && !draft.hasTime);
@@ -256,24 +300,18 @@ function Review({ draft }: { draft: Draft }) {
     };
   }, []);
 
+  // The named list wins; otherwise the default list, once the lists are known.
   useEffect(() => {
-    if (!showList) return;
-    let isCurrent = true;
-    helper(["lists"], 60000)
-      .then((output) => {
-        if (!isCurrent) return;
-        const found = JSON.parse(output) as ReminderList[];
-        setLists(found);
-        setListId((found.find((list) => list.isDefault) ?? found[0])?.id ?? "");
-      })
-      .catch((failure: Error) => {
-        if (isCurrent) showToast({ style: Toast.Style.Failure, title: "Reminders Unavailable", message: failure.message });
-      })
-      .finally(() => isCurrent && setIsLoadingLists(false));
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
+    if (lists.some((list) => list.id === listId)) return;
+    const named = lists.find((list) => list.id === draft.listId);
+    setListId((named ?? lists.find((list) => list.isDefault) ?? lists[0])?.id ?? "");
+  }, [lists]);
+
+  useEffect(() => {
+    if (listFailure && showList) {
+      showToast({ style: Toast.Style.Failure, title: "Reminders Unavailable", message: listFailure });
+    }
+  }, [listFailure]);
 
   async function add(values: FormValues) {
     if (isAdding) return;
@@ -285,7 +323,7 @@ function Review({ draft }: { draft: Draft }) {
     const reminder = {
       title: title.trim(),
       notes: showNotes ? notes.trim() : "",
-      listId: showList ? listId : "",
+      listId: showList ? listId : (draft.listId ?? ""),
       due: date ? date.getTime() : null,
       hasTime: Boolean(date) && !allDay,
       priority: Number(values.priority ?? 0),
@@ -306,7 +344,7 @@ function Review({ draft }: { draft: Draft }) {
 
   return (
     <Form
-      isLoading={isWriting || isLoadingLists || isAdding}
+      isLoading={isWriting || (showList && isLoadingLists && lists.length === 0) || isAdding}
       actions={
         <ActionPanel>
           <Action.SubmitForm title="Add Reminder" icon={Icon.Plus} onSubmit={add} />
@@ -384,10 +422,12 @@ function FromText({ text }: { text: string }) {
   const [draft, setDraft] = useState<Draft | null>(null);
 
   useEffect(() => {
-    detect(text)
-      .then((matches) => setDraft(draftFor(text, matches)))
+    const known = cachedLists();
+    const lists = known.length > 0 ? Promise.resolve(known) : loadLists().catch(() => []);
+    Promise.all([detect(text), lists])
+      .then(([matches, found]) => setDraft(draftFor(text, matches, found)))
       .catch((failure: Error) => {
-        setDraft({ text, title: text, date: null, hasTime: false });
+        setDraft({ text, title: text, date: null, hasTime: false, listId: null });
         showToast({ style: Toast.Style.Failure, title: "Date Unavailable", message: failure.message });
       });
   }, []);
@@ -402,15 +442,18 @@ export default function Command(props: LaunchProps) {
 
 function Search() {
   const [searchText, setSearchText] = useState("");
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [found, setFound] = useState<{ text: string; matches: Match[] } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { lists } = useLists();
   const typed = searchText.trim();
+  const draft = found && typed ? draftFor(found.text, found.matches, lists) : null;
+  const listTitle = draft?.listId ? lists.find((list) => list.id === draft.listId)?.title : undefined;
 
   useEffect(() => {
     setError(null);
     if (!typed) {
-      setDraft(null);
+      setFound(null);
       setIsLoading(false);
       return;
     }
@@ -418,10 +461,10 @@ function Search() {
     setIsLoading(true);
     const timer = setTimeout(() => {
       detect(typed)
-        .then((detection) => isCurrent && setDraft(draftFor(typed, detection)))
+        .then((matches) => isCurrent && setFound({ text: typed, matches }))
         .catch((failure: Error) => {
           if (isCurrent) {
-            setDraft(null);
+            setFound(null);
             setError(failure.message);
           }
         })
@@ -433,6 +476,10 @@ function Search() {
     };
   }, [typed]);
 
+  const accessories: List.Item.Accessory[] = [];
+  if (listTitle) accessories.push({ icon: Icon.List, text: listTitle });
+  if (draft?.date) accessories.push({ icon: Icon.Calendar, text: dateLabel(draft.date, draft.hasTime) });
+
   return (
     <List
       isLoading={isLoading}
@@ -442,11 +489,11 @@ function Search() {
     >
       {error ? (
         <List.EmptyView icon={Icon.ExclamationMark} title="Reminders Unavailable" description={error} />
-      ) : draft && typed ? (
+      ) : draft ? (
         <List.Item
           icon={Icon.Circle}
           title={draft.title}
-          accessories={draft.date ? [{ icon: Icon.Calendar, text: dateLabel(draft.date, draft.hasTime) }] : undefined}
+          accessories={accessories}
           actions={
             <ActionPanel>
               <Action.Push title="Review Reminder" icon={Icon.Pencil} target={<Review draft={draft} />} />
