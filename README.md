@@ -8,11 +8,12 @@ Create a reminder without leaving the keyboard. Remind is a [Tinycast](https://g
 
 Type a reminder, like "pick up dry cleaning friday at 5", and Remind shows the date as you type. Press ↵ to open the review screen, where you can change anything before the reminder is added.
 
-| Shortcut | Action                 |
-| -------- | ---------------------- |
-| ↵        | Open the review screen |
-| ⌘↵       | Add the reminder       |
-| Esc      | Go back                |
+| Shortcut | Action                        |
+| -------- | ----------------------------- |
+| ↵        | Open the review screen        |
+| ⌘↵       | Add the reminder              |
+| Esc      | Go back                       |
+| ⇧⌫       | Clear remembered list matches |
 
 ### Lists
 
@@ -25,6 +26,8 @@ Name a list, including the word "list", to add the reminder to it.
 | Work list send the deck        | Work      | send the deck |
 
 The list must already exist in Reminders. Capitalization, spaces, and symbols don't matter, so "sideprojects" finds Side Projects.
+
+With Apple Intelligence on, a name that isn't one of your lists goes to the list it fits. "add to my grocery list" goes to a list named Supermarket, for example. Remind remembers the match, so it's instant next time. To change it, pick another list on the review screen, and Remind remembers that instead.
 
 A phrase that only mentions a list, like "make a grocery list", stays in the title. A list named like a date, such as Today, doesn't set the date.
 
@@ -49,7 +52,7 @@ If Remind doesn't appear when you type **remind**, turn on **Show in launcher** 
 
 | Setting            | Default | Description                                                                  |
 | ------------------ | ------- | ---------------------------------------------------------------------------- |
-| Apple Intelligence | On      | Writes titles with the on-device model.                                      |
+| Apple Intelligence | On      | Writes titles and matches list names with the on-device model.               |
 | List               | On      | Shows the List field on the review screen.                                   |
 | Notes              | On      | Shows the Notes field on the review screen.                                  |
 | Priority           | Off     | Shows the Priority field on the review screen.                               |
@@ -58,7 +61,7 @@ If Remind doesn't appear when you type **remind**, turn on **Show in launcher** 
 
 ### Apple Intelligence
 
-Remind uses the on-device Apple Foundation Model to write titles. Dates come from the macOS date detector.
+Remind uses the on-device Apple Foundation Model to write titles and to match list names to your lists. Dates come from the macOS date detector.
 
 Requires macOS 27 with Apple Intelligence turned on. Run this once to accept the Foundation Models terms:
 

@@ -85,3 +85,39 @@ export function findList(text: string, lists: NamedList[]): ListMatch | null {
 
   return best ? { id: best.id, start: best.start, end: best.end } : null;
 }
+
+export interface ListHint {
+  name: string;
+  start: number;
+  end: number;
+}
+
+const notNames = new Set(["a", "an", "this", "that", "your", "his", "her", "their", "its", "list", "lists"]);
+const longestHint = 4;
+
+// A list named that isn't one of the person's lists, like "to my grocery list" with no Grocery
+// list. Only the "on", "to" or "in" form counts, so "make a grocery list" is never a hint.
+export function findListHint(text: string): ListHint | null {
+  const words = wordsIn(text);
+  for (let at = 0; at < words.length; at++) {
+    if (!listWord.test(words[at].text)) continue;
+    let first = at;
+    while (first > 0 && at - first < longestHint) {
+      const word = bare(words[first - 1]);
+      if (!word || owning.has(word) || linking.has(word) || notNames.has(word)) break;
+      first--;
+    }
+    if (first === at) continue;
+    let from = first;
+    if (owning.has(bare(words[from - 1]))) from--;
+    if (!linking.has(bare(words[from - 1]))) continue;
+    from--;
+    return { name: text.slice(words[first].start, words[at - 1].end), start: words[from].start, end: words[at].end };
+  }
+  return null;
+}
+
+// Remembered matches are keyed this way, so "Grocery" and "grocery" are one name.
+export function hintKey(name: string): string {
+  return normalize(name);
+}

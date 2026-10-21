@@ -1,0 +1,16 @@
+{
+  "required": [
+    "list"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "list": {
+      "type": "string"
+    }
+  },
+  "title": "Match",
+  "x-order": [
+    "list"
+  ],
+  "type": "object"
+}

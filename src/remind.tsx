@@ -19,7 +19,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { useEffect, useRef, useState } from "react";
-import { findList } from "./list";
+import { findList, findListHint, hintKey } from "./list";
 import { typingFrames, typingStep } from "./typing";
 import { Match, when } from "./when";
 
@@ -42,6 +42,8 @@ interface Draft {
   date: Date | null;
   hasTime: boolean;
   listId: string | null;
+  // A list name that isn't one of the person's lists, like "grocery", and the title if no list fits.
+  hint: { name: string; title: string } | null;
 }
 
 interface FormValues {
@@ -85,7 +87,9 @@ function titleInstructions(withNotes: boolean): string {
   return [
     "You are an expert at writing reminders. Rewrite the person's text as a short reminder title.",
     "Start with a capital letter. Keep their words in their order. Remove only words that no longer make sense.",
-    ...(withNotes ? ["Move a phone number, address or link to notes. Otherwise leave notes empty."] : []),
+    ...(withNotes
+      ? ["Move a phone number, address or link to notes. Never put a time or date in notes. Otherwise leave notes empty."]
+      : []),
     "",
     "Examples:",
     ...shown,
@@ -183,13 +187,62 @@ async function detect(text: string): Promise<Match[]> {
   return found;
 }
 
+function readDates(text: string, matches: Match[]) {
+  // A date inside a list's name ("on my Today list") isn't a date.
+  return when(
+    text,
+    matches.filter((match) => text.includes(match.matched)),
+  );
+}
+
 function draftFor(text: string, matches: Match[], lists: ReminderList[]): Draft {
   const list = findList(text, lists);
-  const rest = list ? `${text.slice(0, list.start)} ${text.slice(list.end)}` : text;
-  // A date inside a list's name ("on my Today list") isn't a date.
-  const dates = matches.filter((match) => rest.includes(match.matched));
-  const { title, date, hasTime } = when(rest, dates);
-  return { text, title, date: date === null ? null : new Date(date), hasTime, listId: list?.id ?? null };
+  const hinted = list || lists.length === 0 ? null : findListHint(text);
+  const picked = hinted ? pickedList(hinted.name, lists) : null;
+  const cut = list ?? hinted;
+  const rest = cut ? `${text.slice(0, cut.start)} ${text.slice(cut.end)}` : text;
+  const { title, date, hasTime } = readDates(rest, matches);
+  const askModel = hinted && !picked && getPreferenceValues<Preferences.Remind>().appleIntelligence;
+  return {
+    text,
+    title: hinted && !picked && !askModel ? readDates(text, matches).title : title,
+    date: date === null ? null : new Date(date),
+    hasTime,
+    listId: list?.id ?? picked ?? null,
+    hint: hinted ? { name: hinted.name, title: readDates(text, matches).title } : null,
+  };
+}
+
+// The list each name led to last time, so "grocery" goes straight to Shopping after the first.
+const pickCache = new Cache({ namespace: "list-picks" });
+
+function pickedList(name: string, lists: ReminderList[]): string | null {
+  const id = pickCache.get(hintKey(name));
+  return id && lists.some((list) => list.id === id) ? id : null;
+}
+
+// Forgets every remembered list match and the saved copy of the lists.
+async function clearCache() {
+  pickCache.clear();
+  listCache.clear();
+  detections.clear();
+  await showToast({ title: "Cache Cleared" });
+}
+
+function ClearCacheAction() {
+  return (
+    <Action
+      title="Clear Cache"
+      icon={Icon.Trash}
+      style={Action.Style.Destructive}
+      shortcut={{ modifiers: ["shift"], key: "delete" }}
+      onAction={clearCache}
+    />
+  );
+}
+
+function rememberPick(name: string, listId: string) {
+  if (listId) pickCache.set(hintKey(name), listId);
 }
 
 // Lists change rarely, so the last ones seen show at once while a fresh copy loads behind them.
@@ -261,26 +314,62 @@ function fmError(output: string): string {
   return text.split("\n").find((line) => line.trim()) ?? "The on-device model didn't respond.";
 }
 
-// Asks the on-device model for a title and notes. The text is prefixed so it never reads as an option.
-function writeTitle(text: string, withNotes: boolean): Promise<{ title: string; notes: string }> {
+// Runs the on-device model once and reads its JSON answer. The prompt is prefixed so it never
+// reads as an option.
+function askModel(instructions: string, schema: string, prompt: string): Promise<Record<string, unknown>> {
   if (!existsSync(fm)) return Promise.reject(new Error("Apple Intelligence in Remind needs macOS 27 or later."));
-  const args = ["respond", "--greedy", "--no-stream", "--instructions", titleInstructions(withNotes)];
-  args.push("--schema", asset(withNotes ? "title-notes-schema.json" : "title-schema.json"), `Text: ${text}`);
+  const args = ["respond", "--greedy", "--no-stream", "--instructions", instructions, "--schema", asset(schema), prompt];
   return new Promise((resolve, reject) =>
     execFile(fm, args, { timeout: 15000 }, (error, stdout, stderr) => {
       if (error) return reject(new Error(fmError(String(stderr ?? "") || error.message)));
       const output = String(stdout);
       try {
-        const answer = JSON.parse(output.slice(output.indexOf("{"), output.lastIndexOf("}") + 1));
-        const title = String(answer.title ?? "")
-          .replace(/^(?:reminder|text):\s*/i, "")
-          .trim();
-        resolve({ title, notes: String(answer.notes ?? "").trim() });
+        resolve(JSON.parse(output.slice(output.indexOf("{"), output.lastIndexOf("}") + 1)));
       } catch {
         reject(new Error("The on-device model returned an answer Remind couldn't read."));
       }
     }),
   );
+}
+
+async function writeTitle(text: string, withNotes: boolean): Promise<{ title: string; notes: string }> {
+  const answer = await askModel(
+    titleInstructions(withNotes),
+    withNotes ? "title-notes-schema.json" : "title-schema.json",
+    `Text: ${text}`,
+  );
+  const title = String(answer.title ?? "")
+    .replace(/^(?:reminder|text):\s*/i, "")
+    .trim();
+  const notes = String(answer.notes ?? "").trim();
+  // A bare number, like a time the model misread, isn't a note; a phone number has seven digits or more.
+  const isNumber = !/\p{L}/u.test(notes) && notes.replace(/\D/g, "").length < 7;
+  return { title, notes: isNumber ? "" : notes };
+}
+
+const listInstructions = [
+  "You are an expert at organizing reminders. Match the list name the person said to one of their lists.",
+  "Answer with the list it means. If no list fits, answer None.",
+  "",
+  "Examples:",
+  'Lists: Supermarket, Office, Home. Name: grocery → {list: "Supermarket"}',
+  'Lists: Supermarket, Office, Home. Name: work → {list: "Office"}',
+  'Lists: Supermarket, Office, Home. Name: gym → {list: "None"}',
+  "",
+  "Only answer with a list from Lists, or None.",
+].join("\n");
+
+// Asks the on-device model which list a name like "grocery" means. Anything not on the list is no list.
+async function pickList(name: string, lists: ReminderList[]): Promise<string | null> {
+  const titles = [...new Set(lists.map((list) => list.title))];
+  const answer = await askModel(listInstructions, "list-schema.json", `Lists: ${titles.join(", ")}. Name: ${name}`);
+  const said = normalizeTitle(String(answer.list ?? ""));
+  const match = lists.filter((list) => normalizeTitle(list.title) === said);
+  return (match.find((list) => list.isDefault) ?? match[0])?.id ?? null;
+}
+
+function normalizeTitle(title: string): string {
+  return title.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 }
 
 function Review({ draft }: { draft: Draft }) {
@@ -297,6 +386,8 @@ function Review({ draft }: { draft: Draft }) {
   const [allDay, setAllDay] = useState(draft.date !== null && !draft.hasTime);
   const titleEdited = useRef(false);
   const notesEdited = useRef(false);
+  const listChosen = useRef(false);
+  const listPicked = useRef(false);
   // While the new title types in, this is where it's headed, so ⌘↵ never adds half of it.
   const typingTo = useRef<string | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -332,17 +423,40 @@ function Review({ draft }: { draft: Draft }) {
 
   useEffect(() => stopTyping, []);
 
+  // A list name that isn't a list goes to the model first; the title follows from what it decides.
+  const [isPicking, setIsPicking] = useState(Boolean(draft.hint && !draft.listId && appleIntelligence));
+
   useEffect(() => {
     if (!appleIntelligence) return;
     let isCurrent = true;
-    writeTitle(draft.title, showNotes)
+    const hint = draft.hint && !draft.listId ? draft.hint : null;
+    const known = cachedLists();
+    const picking = hint
+      ? (known.length > 0 ? Promise.resolve(known) : loadLists())
+          .then((found) => pickList(hint.name, found))
+          .catch(() => null)
+      : Promise.resolve(draft.listId);
+    picking
+      .then((picked) => {
+        if (!isCurrent) return "";
+        setIsPicking(false);
+        if (!hint) return draft.title;
+        if (picked) {
+          listPicked.current = true;
+          setListId(picked);
+          return draft.title;
+        }
+        if (!titleEdited.current) showTitle(hint.title);
+        return hint.title;
+      })
+      .then((text) => (isCurrent && text ? writeTitle(text, showNotes) : Promise.reject(null)))
       .then((answer) => {
         if (!isCurrent) return;
         if (answer.title && !titleEdited.current) typeTitle(answer.title);
         if (answer.notes && showNotes && !notesEdited.current) setNotes(answer.notes);
       })
-      .catch((failure: Error) => {
-        if (!isCurrent || warnedAboutAppleIntelligence) return;
+      .catch((failure: Error | null) => {
+        if (!failure || !isCurrent || warnedAboutAppleIntelligence) return;
         warnedAboutAppleIntelligence = true;
         showToast({ style: Toast.Style.Failure, title: "Apple Intelligence Unavailable", message: failure.message });
       })
@@ -374,6 +488,9 @@ function Review({ draft }: { draft: Draft }) {
       return;
     }
     setIsAdding(true);
+    // Once the reminder is added, a name like "grocery" goes to that list next time, whether the
+    // model picked it or the person did. Going back without adding remembers nothing.
+    if (draft.hint && (listPicked.current || listChosen.current)) rememberPick(draft.hint.name, listId);
     const reminder = {
       title: finalTitle,
       notes: showNotes ? notes.trim() : "",
@@ -398,10 +515,11 @@ function Review({ draft }: { draft: Draft }) {
 
   return (
     <Form
-      isLoading={isWriting || (showList && isLoadingLists && lists.length === 0) || isAdding}
+      isLoading={isWriting || isPicking || (showList && isLoadingLists && lists.length === 0) || isAdding}
       actions={
         <ActionPanel>
           <Action.SubmitForm title="Add Reminder" icon={Icon.Plus} onSubmit={add} />
+          <ClearCacheAction />
         </ActionPanel>
       }
     >
@@ -426,7 +544,15 @@ function Review({ draft }: { draft: Draft }) {
       />
       <Form.Checkbox id="allDay" label="All-Day" value={allDay} onChange={setAllDay} />
       {showList ? (
-        <Form.Dropdown id="list" title="List" value={listId} onChange={setListId}>
+        <Form.Dropdown
+          id="list"
+          title="List"
+          value={listId}
+          onChange={(value) => {
+            if (value !== listId) listChosen.current = true;
+            setListId(value);
+          }}
+        >
           {lists.map((list) => (
             <Form.Dropdown.Item key={list.id} value={list.id} title={listLabel(list, lists)} />
           ))}
@@ -484,7 +610,7 @@ function FromText({ text }: { text: string }) {
     Promise.all([detect(text), lists])
       .then(([matches, found]) => setDraft(draftFor(text, matches, found)))
       .catch((failure: Error) => {
-        setDraft({ text, title: text, date: null, hasTime: false, listId: null });
+        setDraft({ text, title: text, date: null, hasTime: false, listId: null, hint: null });
         showToast({ style: Toast.Style.Failure, title: "Date Unavailable", message: failure.message });
       });
   }, []);
@@ -562,6 +688,7 @@ function Search() {
           actions={
             <ActionPanel>
               <Action.Push title="Review Reminder" icon={Icon.Pencil} target={<Review draft={draft} />} />
+              <ClearCacheAction />
             </ActionPanel>
           }
         />
