@@ -67,7 +67,7 @@ export function findList(text: string, lists: NamedList[]): ListMatch | null {
       const last = words[first + size - 1];
       const list = named.get(normalize(text.slice(words[first].start, last.end)));
       if (!list) continue;
-      // A list whose own name ends in "list" ("Shopping List") already says it.
+      // A list whose own name ends in "list" ("Reading List") already says it.
       const saysList = /\blists?$/i.test(list.title.trim()) || listWord.test(words[first + size]?.text ?? "");
       if (!saysList) continue;
       const to = /\blists?$/i.test(list.title.trim()) ? first + size : first + size + 1;

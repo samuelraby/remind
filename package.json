@@ -23,7 +23,7 @@
           "name": "appleIntelligence",
           "title": "Apple Intelligence",
           "label": "Use Apple Intelligence",
-          "description": "Matches list names to your lists with the on-device model.",
+          "description": "Matches list names and rewrites titles that read badly, with the on-device model.",
           "type": "checkbox",
           "default": true
         },

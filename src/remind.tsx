@@ -23,6 +23,7 @@ import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { useEffect, useRef, useState } from "react";
 import { findList, findListHint, hintKey } from "./list";
+import { isRough, onlyRemovesWords } from "./rough";
 import { Match, when } from "./when";
 
 interface ReminderList {
@@ -192,7 +193,7 @@ function draftFor(text: string, matches: Match[], lists: ReminderList[]): Draft 
   };
 }
 
-// The list each name led to last time, so "grocery" goes straight to Shopping after the first.
+// The list each name led to last time, so "grocery" goes straight to Supermarket after the first.
 const pickCache = new Cache({ namespace: "list-picks" });
 
 function pickedList(name: string, lists: ReminderList[]): string | null {
@@ -311,6 +312,32 @@ function askModel(instructions: string, schema: string, prompt: string): Promise
   );
 }
 
+// Written to Apple's guidance for the on-device model: a role, one direct task, simple examples,
+// and the key rule repeated last.
+const titleInstructions = [
+  "You are an expert at writing reminders. Rewrite the person's text as a short reminder title.",
+  'Remove filler like "don\'t forget" or "I need to", and words left hanging at the end. Keep their other words in their order.',
+  "",
+  "Examples:",
+  'don\'t forget to call mom → {title: "Call mom"}',
+  'I need to pick up dry cleaning → {title: "Pick up dry cleaning"}',
+  'review slides after \'s meeting → {title: "Review slides after meeting"}',
+  'send the deck to → {title: "Send the deck"}',
+  "",
+  "Do not add words the person didn't write.",
+].join("\n");
+
+// Rewrites a rough title. Anything that adds a word, or comes back empty, is no rewrite.
+async function rewriteTitle(text: string): Promise<string | null> {
+  const answer = await askModel(titleInstructions, "title-schema.json", `Text: ${text}`);
+  const said = String(answer.title ?? "")
+    .replace(/^(?:reminder|text):\s*/i, "")
+    .trim();
+  if (!onlyRemovesWords(text, said)) return null;
+  // The model doesn't always start with a capital letter, so Remind makes sure.
+  return said.charAt(0).toLocaleUpperCase() + said.slice(1);
+}
+
 const listInstructions = [
   "You are an expert at organizing reminders. Match the list name the person said to one of their lists.",
   "Answer with the list it means. If no list fits, answer None.",
@@ -362,34 +389,40 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
     setTitle(value);
   }
 
-  // A list name that isn't one of the lists, like "grocery", goes to the on-device model.
-  const [isPicking, setIsPicking] = useState(Boolean(draft.hint && !draft.listId && appleIntelligence));
+  // Apple Intelligence matches a list name that isn't one of the lists, like "grocery", and
+  // rewrites a title that's still rough. Both start together.
+  const hint = draft.hint && !draft.listId ? draft.hint : null;
+  const [isWorking, setIsWorking] = useState(appleIntelligence && (Boolean(hint) || isRough(draft.title)));
 
   useEffect(() => {
-    const hint = draft.hint && !draft.listId ? draft.hint : null;
-    if (!appleIntelligence || !hint) return;
+    if (!appleIntelligence) return;
     let isCurrent = true;
+    const warn = (failure: Error) => {
+      if (isCurrent && !warnedAboutAppleIntelligence) {
+        warnedAboutAppleIntelligence = true;
+        showToast({ style: Toast.Style.Failure, title: "Apple Intelligence Unavailable", message: failure.message });
+      }
+      return null;
+    };
+    const rewrite = (text: string) => (isRough(text) ? rewriteTitle(text).catch(warn) : Promise.resolve(null));
     const known = cachedLists();
-    (known.length > 0 ? Promise.resolve(known) : loadLists())
-      .then((found) => pickList(hint.name, found))
-      .catch((failure: Error) => {
-        if (isCurrent && !warnedAboutAppleIntelligence) {
-          warnedAboutAppleIntelligence = true;
-          showToast({ style: Toast.Style.Failure, title: "Apple Intelligence Unavailable", message: failure.message });
-        }
-        return null;
-      })
-      .then((picked) => {
-        if (!isCurrent) return;
-        setIsPicking(false);
-        if (picked) {
+    const picking = hint
+      ? (known.length > 0 ? Promise.resolve(known) : loadLists()).then((found) => pickList(hint.name, found)).catch(warn)
+      : Promise.resolve(null);
+
+    Promise.all([picking, rewrite(draft.title)])
+      .then(async ([picked, rewritten]) => {
+        let next = rewritten;
+        if (hint && picked) {
           listPicked.current = true;
           setListId(picked);
-        } else if (!titleEdited.current) {
-          // No list fits, so the words go back into the title.
-          showTitle(hint.title);
+        } else if (hint) {
+          // No list fits, so the list words go back into the title, rewritten if they read badly.
+          next = (await rewrite(hint.title)) ?? hint.title;
         }
-      });
+        if (isCurrent && next && !titleEdited.current) showTitle(next);
+      })
+      .finally(() => isCurrent && setIsWorking(false));
     return () => {
       isCurrent = false;
     };
@@ -443,7 +476,7 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
 
   return (
     <Form
-      isLoading={isPicking || (showList && isLoadingLists && lists.length === 0) || isAdding}
+      isLoading={isWorking || (showList && isLoadingLists && lists.length === 0) || isAdding}
       actions={
         <ActionPanel>
           <Action.SubmitForm title="Add Reminder" icon={Icon.Plus} onSubmit={add} />

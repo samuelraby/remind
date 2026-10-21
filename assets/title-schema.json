@@ -1,0 +1,16 @@
+{
+  "required": [
+    "title"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "type": "string"
+    }
+  },
+  "title": "Reminder",
+  "x-order": [
+    "title"
+  ],
+  "type": "object"
+}

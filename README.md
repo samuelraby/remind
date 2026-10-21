@@ -51,18 +51,41 @@ If Remind doesn't appear when you type **remind**, turn on **Show in launcher** 
 
 ### Settings
 
-| Setting            | Default | Description                                                                  |
-| ------------------ | ------- | ---------------------------------------------------------------------------- |
-| Apple Intelligence | On      | Matches list names to your lists with the on-device model.                   |
-| List               | On      | Shows the List field on the review screen.                                   |
-| Notes              | On      | Shows the Notes field on the review screen.                                  |
-| Priority           | Off     | Shows the Priority field on the review screen.                               |
-| Early Alert        | Off     | Shows the Early Alert field on the review screen, for reminders with a time. |
-| Repeat             | Off     | Shows the Repeat field on the review screen.                                 |
+| Setting            | Default | Description                                                                       |
+| ------------------ | ------- | --------------------------------------------------------------------------------- |
+| Apple Intelligence | On      | Matches list names and rewrites titles that read badly, with the on-device model. |
+| List               | On      | Shows the List field on the review screen.                                        |
+| Notes              | On      | Shows the Notes field on the review screen.                                       |
+| Priority           | Off     | Shows the Priority field on the review screen.                                    |
+| Early Alert        | Off     | Shows the Early Alert field on the review screen, for reminders with a time.      |
+| Repeat             | Off     | Shows the Repeat field on the review screen.                                      |
+
+## How it works
+
+Remind reads what you type in three steps.
+
+**1. Date and time.** The date detector built into macOS finds days and times, like "friday", "tomorrow at noon" or "in two weeks". Remind reads 24-hour times itself: "at 1700", "17:00", "0930 hrs", or a bare "1700" right after a day or at the start or end of a reminder that names a day. A number after a word like "room" or "$" stays a number. A day without a time is all-day.
+
+**2. List.** Remind finds a list you name with the word "list". See [Lists](#lists). If the name isn't one of your lists, Apple Intelligence picks the list it fits.
+
+**3. Title.** Remind takes out the date, the time, the list, "remind me", and an "add" that goes with a list. If what's left still reads badly, Apple Intelligence rewrites it. A title reads badly when it:
+
+- Starts with "don't forget", "do not forget to", "remember to", "make sure", "I need to", "I have to", "I've got to", "I got to", "I gotta", "I should", "I must", "need to", "have to", "got to", "gotta", "can you", "could you", "would you" or "please".
+- Ends with "after", "before", "with", "to", "from", "about", "and", "or", "the", "a", "an", "of", "until", "during", "than", "but", "so", "my" or "your".
+- Has a stray "'s", like "after 's meeting".
+
+Apple Intelligence can only take words out. If its title has a word you didn't type, Remind keeps its own.
 
 ### Apple Intelligence
 
-Remind uses the on-device Apple Foundation Model to match list names, like "grocery", to your lists. Dates and times come from the macOS date detector, and the title is what you type.
+Remind uses the on-device Apple Foundation Model for two things, and only when the rules above can't finish the job.
+
+| Task               | Runs when                                                         | Takes          |
+| ------------------ | ----------------------------------------------------------------- | -------------- |
+| Match a list name  | The name isn't one of your lists, and no match is remembered yet. | About a second |
+| Rewrite the title  | The title reads badly after step 3.                               | About a second |
+
+Both run together on the review screen, never while you type. They never change the date, the time or your notes. Everything else opens instantly.
 
 Requires macOS 27 with Apple Intelligence turned on. Run this once to accept the Foundation Models terms:
 
@@ -70,7 +93,7 @@ Requires macOS 27 with Apple Intelligence turned on. Run this once to accept the
 sudo fm license
 ```
 
-When Apple Intelligence is off, only names that match a list exactly are used.
+When Apple Intelligence is off, Remind skips both. List names must match a list exactly, and the title is what's left after step 3.
 
 ## Install
 
