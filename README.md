@@ -6,19 +6,19 @@ Create a reminder without leaving the keyboard. Remind is a [Tinycast](https://g
 
 ## What it does
 
-Type a reminder, like "pick up dry cleaning friday at 5", and Remind shows the date as you type. Press ↵ to review the reminder before it's added.
+Type a reminder, like "pick up dry cleaning friday at 5", and Remind shows the date as you type. Press ↵ to open the review screen, where you can change anything before the reminder is added.
 
-To add it to a list, name the list: "on my Work list", "to Groceries" or "Work list". The list has to exist in Reminders.
+To add it to a list, name the list with the word "list": "on my Work list", "to the Groceries list", or "Work list" at the start. The list has to exist in Reminders.
 
-| Shortcut | Action              |
-| -------- | ------------------- |
-| ↵        | Review the reminder |
-| ⌘↵       | Add the reminder    |
-| Esc      | Go back             |
+| Shortcut | Action                 |
+| -------- | ---------------------- |
+| ↵        | Open the review screen |
+| ⌘↵       | Add the reminder       |
+| Esc      | Go back                |
 
 ### From root search
 
-Type a reminder in Tinycast's root search and go right to the review. To set it up, create a quicklink named **Remind** with this link:
+Type a reminder in Tinycast's root search and go right to the review screen. To set it up, create a quicklink named **Remind** with this link:
 
 ```
 tinycast://extensions/samuel/remind/remind?fallbackText={argument name="Reminder"}
@@ -33,14 +33,14 @@ If Remind doesn't appear when you type **remind**, turn on **Show in launcher** 
 
 ### Settings
 
-| Setting            | Default | Description                                                         |
-| ------------------ | ------- | ------------------------------------------------------------------- |
-| Apple Intelligence | On      | Writes titles with the on-device model.                             |
-| List               | On      | Shows the List field when you review a reminder.                    |
-| Notes              | On      | Shows the Notes field when you review a reminder.                   |
-| Priority           | Off     | Shows the Priority field when you review a reminder.                |
-| Early Alert        | Off     | Shows the Early Alert field when you review a reminder with a time. |
-| Repeat             | Off     | Shows the Repeat field when you review a reminder.                  |
+| Setting            | Default | Description                                                                  |
+| ------------------ | ------- | ---------------------------------------------------------------------------- |
+| Apple Intelligence | On      | Writes titles with the on-device model.                                      |
+| List               | On      | Shows the List field on the review screen.                                   |
+| Notes              | On      | Shows the Notes field on the review screen.                                  |
+| Priority           | Off     | Shows the Priority field on the review screen.                               |
+| Early Alert        | Off     | Shows the Early Alert field on the review screen, for reminders with a time. |
+| Repeat             | Off     | Shows the Repeat field on the review screen.                                 |
 
 ### Apple Intelligence
 

@@ -20,12 +20,20 @@ import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { useEffect, useRef, useState } from "react";
 import { findList } from "./list";
+import { typingFrames, typingStep } from "./typing";
 import { Match, when } from "./when";
 
 interface ReminderList {
   id: string;
   title: string;
+  account?: string;
   isDefault: boolean;
+}
+
+// Lists that share a name across accounts are told apart by their account.
+function listLabel(list: ReminderList, lists: ReminderList[]): string {
+  const shared = lists.filter((other) => other.title === list.title).length > 1;
+  return shared && list.account ? `${list.title} (${list.account})` : list.title;
 }
 
 interface Draft {
@@ -177,7 +185,10 @@ async function detect(text: string): Promise<Match[]> {
 
 function draftFor(text: string, matches: Match[], lists: ReminderList[]): Draft {
   const list = findList(text, lists);
-  const { title, date, hasTime } = when(list ? text.replace(list.text, " ") : text, matches);
+  const rest = list ? `${text.slice(0, list.start)} ${text.slice(list.end)}` : text;
+  // A date inside a list's name ("on my Today list") isn't a date.
+  const dates = matches.filter((match) => rest.includes(match.matched));
+  const { title, date, hasTime } = when(rest, dates);
   return { text, title, date: date === null ? null : new Date(date), hasTime, listId: list?.id ?? null };
 }
 
@@ -279,6 +290,40 @@ function Review({ draft }: { draft: Draft }) {
   const [allDay, setAllDay] = useState(draft.date !== null && !draft.hasTime);
   const titleEdited = useRef(false);
   const notesEdited = useRef(false);
+  // While the new title types in, this is where it's headed, so ⌘↵ never adds half of it.
+  const typingTo = useRef<string | null>(null);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shownTitle = useRef(draft.title);
+
+  function showTitle(value: string) {
+    shownTitle.current = value;
+    setTitle(value);
+  }
+
+  function stopTyping() {
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    typingTimer.current = null;
+    typingTo.current = null;
+  }
+
+  // Types the model's title over the old one in under 150 ms.
+  function typeTitle(to: string) {
+    const frames = typingFrames(shownTitle.current, to);
+    if (frames.length === 0) return;
+    typingTo.current = to;
+    const next = (index: number) => {
+      showTitle(frames[index]);
+      if (index + 1 < frames.length) {
+        typingTimer.current = setTimeout(() => next(index + 1), typingStep);
+      } else {
+        typingTimer.current = null;
+        typingTo.current = null;
+      }
+    };
+    next(0);
+  }
+
+  useEffect(() => stopTyping, []);
 
   useEffect(() => {
     if (!appleIntelligence) return;
@@ -286,7 +331,7 @@ function Review({ draft }: { draft: Draft }) {
     writeTitle(draft.title, showNotes)
       .then((answer) => {
         if (!isCurrent) return;
-        if (answer.title && !titleEdited.current) setTitle(answer.title);
+        if (answer.title && !titleEdited.current) typeTitle(answer.title);
         if (answer.notes && showNotes && !notesEdited.current) setNotes(answer.notes);
       })
       .catch((failure: Error) => {
@@ -315,13 +360,15 @@ function Review({ draft }: { draft: Draft }) {
 
   async function add(values: FormValues) {
     if (isAdding) return;
-    if (!title.trim()) {
+    const finalTitle = (typingTo.current ?? title).trim();
+    stopTyping();
+    if (!finalTitle) {
       await showToast({ style: Toast.Style.Failure, title: "Add a Title" });
       return;
     }
     setIsAdding(true);
     const reminder = {
-      title: title.trim(),
+      title: finalTitle,
       notes: showNotes ? notes.trim() : "",
       listId: showList ? listId : (draft.listId ?? ""),
       due: date ? date.getTime() : null,
@@ -356,8 +403,11 @@ function Review({ draft }: { draft: Draft }) {
         title="Title"
         value={title}
         onChange={(value) => {
+          // Tinycast can echo a value Remind set; only a real edit stops the typing.
+          if (value === shownTitle.current) return;
           titleEdited.current = true;
-          setTitle(value);
+          stopTyping();
+          showTitle(value);
         }}
       />
       <Form.DatePicker
@@ -371,7 +421,7 @@ function Review({ draft }: { draft: Draft }) {
       {showList ? (
         <Form.Dropdown id="list" title="List" value={listId} onChange={setListId}>
           {lists.map((list) => (
-            <Form.Dropdown.Item key={list.id} value={list.id} title={list.title} />
+            <Form.Dropdown.Item key={list.id} value={list.id} title={listLabel(list, lists)} />
           ))}
         </Form.Dropdown>
       ) : null}
@@ -448,7 +498,8 @@ function Search() {
   const { lists } = useLists();
   const typed = searchText.trim();
   const draft = found && typed ? draftFor(found.text, found.matches, lists) : null;
-  const listTitle = draft?.listId ? lists.find((list) => list.id === draft.listId)?.title : undefined;
+  const namedList = draft?.listId ? lists.find((list) => list.id === draft.listId) : undefined;
+  const listTitle = namedList ? listLabel(namedList, lists) : undefined;
 
   useEffect(() => {
     setError(null);

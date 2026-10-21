@@ -31,7 +31,7 @@
           "name": "showList",
           "title": "List",
           "label": "Show List",
-          "description": "Shows the List field when you review a reminder.",
+          "description": "Shows the List field on the review screen.",
           "type": "checkbox",
           "default": true
         },
@@ -39,7 +39,7 @@
           "name": "showNotes",
           "title": "Notes",
           "label": "Show Notes",
-          "description": "Shows the Notes field when you review a reminder.",
+          "description": "Shows the Notes field on the review screen.",
           "type": "checkbox",
           "default": true
         },
@@ -47,7 +47,7 @@
           "name": "showPriority",
           "title": "Priority",
           "label": "Show Priority",
-          "description": "Shows the Priority field when you review a reminder.",
+          "description": "Shows the Priority field on the review screen.",
           "type": "checkbox",
           "default": false
         },
@@ -55,7 +55,7 @@
           "name": "showEarlyAlert",
           "title": "Early Alert",
           "label": "Show Early Alert",
-          "description": "Shows the Early Alert field when you review a reminder with a time.",
+          "description": "Shows the Early Alert field on the review screen, for reminders with a time.",
           "type": "checkbox",
           "default": false
         },
@@ -63,7 +63,7 @@
           "name": "showRepeat",
           "title": "Repeat",
           "label": "Show Repeat",
-          "description": "Shows the Repeat field when you review a reminder.",
+          "description": "Shows the Repeat field on the review screen.",
           "type": "checkbox",
           "default": false
         }
@@ -80,6 +80,7 @@
   },
   "scripts": {
     "build": "ray build -e dist -o build",
-    "package": "sh scripts/package.sh"
+    "package": "sh scripts/package.sh",
+    "test": "tsc --ignoreConfig --target ES2022 --module commonjs --types node --esModuleInterop --strict --outDir .test src/list.ts src/when.ts src/typing.ts tests/phrases.test.ts && node --test .test/tests/phrases.test.js"
   }
 }

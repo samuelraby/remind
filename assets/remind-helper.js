@@ -38,8 +38,10 @@ function lists() {
   const result = [];
   for (let index = 0; index < calendars.count; index++) {
     const calendar = calendars.objectAtIndex(index);
+    // A shared list you can only view can't take a new reminder, so it isn't offered.
+    if (!calendar.allowsContentModifications) continue;
     const id = calendar.calendarIdentifier.js;
-    result.push({ id, title: calendar.title.js, isDefault: id === fallbackId });
+    result.push({ id, title: calendar.title.js, account: calendar.source.title.js, isDefault: id === fallbackId });
   }
   return result;
 }

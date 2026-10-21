@@ -13,6 +13,7 @@ struct Detection: Encodable {
 struct ReminderList: Encodable {
     let id: String
     let title: String
+    let account: String
     let isDefault: Bool
 }
 
@@ -71,8 +72,11 @@ func reminders() -> EKEventStore {
 func lists() {
     let store = reminders()
     let fallback = store.defaultCalendarForNewReminders()?.calendarIdentifier
-    emit(store.calendars(for: .reminder).map {
-        ReminderList(id: $0.calendarIdentifier, title: $0.title, isDefault: $0.calendarIdentifier == fallback)
+    // A shared list you can only view can't take a new reminder, so it isn't offered.
+    emit(store.calendars(for: .reminder).filter(\.allowsContentModifications).map {
+        ReminderList(
+            id: $0.calendarIdentifier, title: $0.title, account: $0.source.title,
+            isDefault: $0.calendarIdentifier == fallback)
     })
 }
 

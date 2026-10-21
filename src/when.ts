@@ -20,7 +20,8 @@ const fourDigitTime = /\b(?:at|by|before|around)\s+([01]\d|2[0-3])([0-5]\d)\b(?:
 const colonTime = /(?:\b(?:at|by|before|around)\s+)?\b(1[3-9]|2[0-3]|0\d):([0-5]\d)\b/i;
 
 const leftoverWords = "on|at|by|for|in|due|before|around|this|next";
-const leading = new RegExp(`^(?:(?:please\\s+)?remind me(?:\\s+to)?\\s+|(?:${leftoverWords})\\s+)+`, "i");
+const leading = new RegExp(`^(?:(?:please\\s+)?remind me(?:\\s+to)?[\\s,:]+|(?:${leftoverWords})\\s+)+`, "i");
+const edges = /^[\s,;:\-–—]+|[\s,;:\-–—]+$/g;
 const trailing = new RegExp(`(?:\\s+(?:${leftoverWords}))+$`, "i");
 
 function within(inner: [number, number], outer: [number, number]): boolean {
@@ -91,8 +92,12 @@ export function when(text: string, matches: Match[], now = new Date()): When {
   for (const part of [...matches.map((match) => match.matched), ...(time ? [time.text] : [])]) {
     rest = rest.replace(part, " ");
   }
-  rest = rest.replace(/\s+/g, " ").trim();
-  const title = rest.replace(leading, "").replace(trailing, "").trim() || text.trim();
+  rest = rest
+    .replace(/\s+([,;:.!?])/g, "$1")
+    .replace(/([,;:])(?=[,;:.!?])/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const title = rest.replace(edges, "").replace(leading, "").replace(trailing, "").replace(edges, "") || text.trim();
 
   return { title, date: date ? date.getTime() : null, hasTime: Boolean(time || timed) };
 }
