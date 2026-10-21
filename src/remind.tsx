@@ -345,9 +345,11 @@ async function writeTitle(text: string, withNotes: boolean): Promise<{ title: st
     withNotes ? "title-notes-schema.json" : "title-schema.json",
     `Text: ${text}`,
   );
-  const title = String(answer.title ?? "")
+  const said = String(answer.title ?? "")
     .replace(/^(?:reminder|text):\s*/i, "")
     .trim();
+  // The model doesn't always follow "start with a capital letter", so Remind makes sure.
+  const title = said.charAt(0).toLocaleUpperCase() + said.slice(1);
   const notes = String(answer.notes ?? "").trim();
   // A bare number, like a time the model misread, isn't a note; a phone number has seven digits or more.
   const isNumber = !/\p{L}/u.test(notes) && notes.replace(/\D/g, "").length < 7;
@@ -614,7 +616,7 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
 }
 
 // Opened from root search with text, Remind goes straight to the review form.
-function FromText({ text }: { text: string }) {
+function FromText({ text, onEdit }: { text: string; onEdit?: () => void }) {
   const [draft, setDraft] = useState<Draft | null>(null);
 
   useEffect(() => {
@@ -632,7 +634,7 @@ function FromText({ text }: { text: string }) {
   const edit = () =>
     launchCommand({ name: "remind", type: LaunchType.UserInitiated, fallbackText: text, context: { edit: true } });
 
-  return draft ? <Review draft={draft} onEdit={edit} /> : <Form isLoading />;
+  return draft ? <Review draft={draft} onEdit={onEdit ?? edit} /> : <Form isLoading />;
 }
 
 export default function Command(props: LaunchProps<{ launchContext: { edit?: boolean } }>) {
@@ -706,7 +708,14 @@ function Search() {
           accessories={accessories}
           actions={
             <ActionPanel>
-              <Action.Push title="Review Reminder" icon={Icon.Pencil} target={<Review draft={draft} onEdit={pop} />} />
+              <Action.Push
+                title="Review Reminder"
+                icon={Icon.Pencil}
+                target={
+                  // ↵ before the latest text is read reviews that text, never the one before it.
+                  found?.text === typed ? <Review draft={draft} onEdit={pop} /> : <FromText text={typed} onEdit={pop} />
+                }
+              />
               <ClearCacheAction />
             </ActionPanel>
           }
