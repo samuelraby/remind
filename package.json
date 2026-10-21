@@ -28,6 +28,14 @@
           "default": true
         },
         {
+          "name": "fixSpelling",
+          "title": "Spelling and Grammar",
+          "label": "Correct spelling and grammar",
+          "description": "Corrects spelling and grammar in titles with the on-device model. Needs Apple Intelligence.",
+          "type": "checkbox",
+          "default": false
+        },
+        {
           "name": "showList",
           "title": "List",
           "label": "Show List",

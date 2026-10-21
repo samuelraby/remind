@@ -23,7 +23,7 @@ import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { useEffect, useRef, useState } from "react";
 import { findList, findListHint, hintKey } from "./list";
-import { isRough, onlyRemovesWords } from "./rough";
+import { isRough, onlyCorrects, onlyRemovesWords } from "./rough";
 import { Match, when } from "./when";
 
 interface ReminderList {
@@ -313,27 +313,35 @@ function askModel(instructions: string, schema: string, prompt: string): Promise
 }
 
 // Written to Apple's guidance for the on-device model: a role, one direct task, simple examples,
-// and the key rule repeated last.
-const titleInstructions = [
-  "You are an expert at writing reminders. Rewrite the person's text as a short reminder title.",
-  'Remove filler like "don\'t forget" or "I need to", and words left hanging at the end. Keep their other words in their order.',
-  "",
-  "Examples:",
-  'don\'t forget to call mom → {title: "Call mom"}',
-  'I need to pick up dry cleaning → {title: "Pick up dry cleaning"}',
-  'review slides after \'s meeting → {title: "Review slides after meeting"}',
-  'send the deck to → {title: "Send the deck"}',
-  "",
-  "Do not add words the person didn't write.",
-].join("\n");
+// and the key rule repeated last. Spelling and grammar are only mentioned when that setting is on.
+function titleInstructions(fixSpelling: boolean): string {
+  return [
+    "You are an expert at writing reminders. Rewrite the person's text as a short reminder title.",
+    'Remove filler like "don\'t forget" or "I need to", and words left hanging at the end. Keep their other words in their order.',
+    ...(fixSpelling ? ["Fix spelling and grammar mistakes."] : []),
+    "",
+    "Examples:",
+    'don\'t forget to call mom → {title: "Call mom"}',
+    'I need to pick up dry cleaning → {title: "Pick up dry cleaning"}',
+    'review slides after \'s meeting → {title: "Review slides after meeting"}',
+    'send the deck to → {title: "Send the deck"}',
+    ...(fixSpelling
+      ? ['pick up cofee → {title: "Pick up coffee"}', 'pick up kids school → {title: "Pick up kids from school"}']
+      : []),
+    "",
+    "Do not add words the person didn't write.",
+  ].join("\n");
+}
 
-// Rewrites a rough title. Anything that adds a word, or comes back empty, is no rewrite.
-async function rewriteTitle(text: string): Promise<string | null> {
-  const answer = await askModel(titleInstructions, "title-schema.json", `Text: ${text}`);
+// Rewrites a title. Without spelling and grammar it may only take words out; with it, it may also
+// respell words and add small grammar words. Anything else, or an empty answer, is no rewrite.
+async function rewriteTitle(text: string, fixSpelling: boolean): Promise<string | null> {
+  const answer = await askModel(titleInstructions(fixSpelling), "title-schema.json", `Text: ${text}`);
   const said = String(answer.title ?? "")
     .replace(/^(?:reminder|text):\s*/i, "")
     .trim();
-  if (!onlyRemovesWords(text, said)) return null;
+  const allowed = fixSpelling ? onlyCorrects(text, said) : onlyRemovesWords(text, said);
+  if (!allowed) return null;
   // The model doesn't always start with a capital letter, so Remind makes sure.
   return said.charAt(0).toLocaleUpperCase() + said.slice(1);
 }
@@ -369,7 +377,7 @@ function EditTextAction({ onEdit }: { onEdit: () => void }) {
 }
 
 function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
-  const { appleIntelligence, showList, showNotes, showPriority, showEarlyAlert, showRepeat } =
+  const { appleIntelligence, fixSpelling, showList, showNotes, showPriority, showEarlyAlert, showRepeat } =
     getPreferenceValues<Preferences.Remind>();
   const [title, setTitle] = useState(draft.title);
   const [notes, setNotes] = useState("");
@@ -392,7 +400,9 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
   // Apple Intelligence matches a list name that isn't one of the lists, like "grocery", and
   // rewrites a title that's still rough. Both start together.
   const hint = draft.hint && !draft.listId ? draft.hint : null;
-  const [isWorking, setIsWorking] = useState(appleIntelligence && (Boolean(hint) || isRough(draft.title)));
+  // With spelling and grammar on, every title goes to the model; otherwise only rough ones.
+  const needsRewrite = (text: string) => fixSpelling || isRough(text);
+  const [isWorking, setIsWorking] = useState(appleIntelligence && (Boolean(hint) || needsRewrite(draft.title)));
 
   useEffect(() => {
     if (!appleIntelligence) return;
@@ -404,7 +414,8 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
       }
       return null;
     };
-    const rewrite = (text: string) => (isRough(text) ? rewriteTitle(text).catch(warn) : Promise.resolve(null));
+    const rewrite = (text: string) =>
+      needsRewrite(text) ? rewriteTitle(text, fixSpelling).catch(warn) : Promise.resolve(null);
     const known = cachedLists();
     const picking = hint
       ? (known.length > 0 ? Promise.resolve(known) : loadLists()).then((found) => pickList(hint.name, found)).catch(warn)

@@ -51,14 +51,15 @@ If Remind doesn't appear when you type **remind**, turn on **Show in launcher** 
 
 ### Settings
 
-| Setting            | Default | Description                                                                       |
-| ------------------ | ------- | --------------------------------------------------------------------------------- |
-| Apple Intelligence | On      | Matches list names and rewrites titles that read badly, with the on-device model. |
-| List               | On      | Shows the List field on the review screen.                                        |
-| Notes              | On      | Shows the Notes field on the review screen.                                       |
-| Priority           | Off     | Shows the Priority field on the review screen.                                    |
-| Early Alert        | Off     | Shows the Early Alert field on the review screen, for reminders with a time.      |
-| Repeat             | Off     | Shows the Repeat field on the review screen.                                      |
+| Setting              | Default | Description                                                                                 |
+| -------------------- | ------- | ------------------------------------------------------------------------------------------- |
+| Apple Intelligence   | On      | Matches list names and rewrites titles that read badly, with the on-device model.           |
+| Spelling and Grammar | Off     | Corrects spelling and grammar in titles with the on-device model. Needs Apple Intelligence. |
+| List                 | On      | Shows the List field on the review screen.                                                  |
+| Notes                | On      | Shows the Notes field on the review screen.                                                 |
+| Priority             | Off     | Shows the Priority field on the review screen.                                              |
+| Early Alert          | Off     | Shows the Early Alert field on the review screen, for reminders with a time.                |
+| Repeat               | Off     | Shows the Repeat field on the review screen.                                                |
 
 ## How it works
 
@@ -110,16 +111,19 @@ If what's left still reads badly, Apple Intelligence rewrites it. A title reads 
 
 Apple Intelligence can only take words out. If its title has a word you didn't type, Remind keeps its own.
 
+With **Spelling and Grammar** on, Apple Intelligence also corrects every title, not only the ones that read badly. It may respell a word of five letters or more, one letter for every four, so "cofee" becomes "coffee" and "recieve" becomes "receive". It may add "a", "an", "the", "to", "from", "at", "in", "on", "for", "of", "with", "and", "is" or "are". Shorter words must stay as typed, so "ice" can't become "rice". Any other change, and Remind keeps its own title.
+
 ### Apple Intelligence
 
-Remind uses the on-device Apple Foundation Model for two things, and only when the rules above can't finish the job.
+Remind uses the on-device Apple Foundation Model only when the rules above can't finish the job, or when you ask it to correct spelling and grammar.
 
-| Task               | Runs when                                                         | Takes          |
-| ------------------ | ----------------------------------------------------------------- | -------------- |
-| Match a list name  | The name isn't one of your lists, and no match is remembered yet. | About a second |
-| Rewrite the title  | The title reads badly after step 3.                               | About a second |
+| Task                         | Runs when                                                         | Takes          |
+| ---------------------------- | ----------------------------------------------------------------- | -------------- |
+| Match a list name            | The name isn't one of your lists, and no match is remembered yet. | About a second |
+| Rewrite the title            | The title reads badly after step 3.                               | About a second |
+| Correct spelling and grammar | Spelling and Grammar is on. Runs on every title.                  | About a second |
 
-Both run together on the review screen, never while you type. They never change the date, the time or your notes. Everything else opens instantly.
+They run together on the review screen, never while you type. They never change the date, the time or your notes. Everything else opens instantly.
 
 Requires macOS 27 with Apple Intelligence turned on. Run this once to accept the Foundation Models terms:
 
@@ -127,7 +131,7 @@ Requires macOS 27 with Apple Intelligence turned on. Run this once to accept the
 sudo fm license
 ```
 
-When Apple Intelligence is off, Remind skips both. List names must match a list exactly, and the title is what's left after step 3.
+When Apple Intelligence is off, Remind skips all of these. List names must match a list exactly, and the title is what's left after step 3.
 
 ## How the code works
 
@@ -138,7 +142,7 @@ Remind is a Tinycast extension written in TypeScript, with a small Swift helper 
 | `src/remind.tsx`              | The typing screen, the review screen and settings. Calls the helper and Apple Intelligence.   |
 | `src/when.ts`                 | Step 1 and the title cleanup in step 3.                                                       |
 | `src/list.ts`                 | Step 2: finds a list you named, or a name for Apple Intelligence to match.                    |
-| `src/rough.ts`                | Decides when a title reads badly, and checks that a rewrite only took words out.              |
+| `src/rough.ts`                | Decides when a title reads badly, and checks that a rewrite only made allowed changes.        |
 | `assets/remind-helper.swift`  | Reads dates with the macOS date detector, reads your lists and adds reminders to Reminders.   |
 | `assets/remind-helper.js`     | The same helper as a script, used until the Swift helper is built.                            |
 | `assets/list-schema.json`     | The shape of Apple Intelligence's list answer.                                                |
