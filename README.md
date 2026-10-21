@@ -22,9 +22,9 @@ Name a list, including the word "list", to add the reminder to it.
 
 | You type                       | List      | Title         |
 | ------------------------------ | --------- | ------------- |
-| get coffee on my Errands list  | Errands   | get coffee    |
-| add eggs to the Groceries list | Groceries | eggs          |
-| Work list send the deck        | Work      | send the deck |
+| get coffee on my Errands list  | Errands   | Get coffee    |
+| add eggs to the Groceries list | Groceries | Eggs          |
+| Work list send the deck        | Work      | Send the deck |
 
 The list must already exist in Reminders. Capitalization, spaces, and symbols don't matter, so "sideprojects" finds Side Projects.
 
@@ -96,12 +96,12 @@ If the name isn't one of your lists, Apple Intelligence picks the list it fits. 
 Remind takes out, in order:
 
 - Every date and time it read, and the list phrase. A date inside a list's name, like Today, stays part of the list.
-- "add" at the start, when the list comes after "to", "onto" or "into": "add eggs to the Groceries list" gives "eggs".
+- "add" at the start, when the list comes after "to", "onto" or "into": "add eggs to the Groceries list" gives "Eggs".
 - "remind me", "remind me to" and "please remind me" at the start.
 - "on", "at", "by", "for", "in", "due", "before", "around", "this" and "next" left over at the start or end.
 - Stray punctuation at the start or end.
 
-If nothing is left, the title is everything you typed.
+If nothing is left, the title is everything you typed. The first letter is always a capital, the way Siri writes it.
 
 If what's left still reads badly, Apple Intelligence rewrites it. A title reads badly when it:
 

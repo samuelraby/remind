@@ -126,7 +126,9 @@ export function when(text: string, matches: Match[], now = new Date()): When {
     .replace(/([,;:])(?=[,;:.!?])/g, "")
     .replace(/\s+/g, " ")
     .trim();
-  const title = rest.replace(edges, "").replace(leading, "").replace(trailing, "").replace(edges, "") || text.trim();
+  const cleaned = rest.replace(edges, "").replace(leading, "").replace(trailing, "").replace(edges, "") || text.trim();
+  // The first letter is a capital, the way Siri and Reminders write a title.
+  const title = cleaned.charAt(0).toLocaleUpperCase() + cleaned.slice(1);
 
   return { title, date: date ? date.getTime() : null, hasTime: Boolean(time || timed) };
 }
