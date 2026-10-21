@@ -9,6 +9,8 @@ interface When {
   title: string;
   date: number | null;
   hasTime: boolean;
+  // False when there's nothing to remind about yet, like "remind me today".
+  hasContent: boolean;
 }
 
 // The date detector always returns a time, so a time counts only when the words name one.
@@ -133,8 +135,11 @@ export function when(text: string, matches: Match[], now = new Date()): When {
   const typed = rest.replace(edges, "").toLowerCase();
   const isLeadIn = leadInsTyped.some((lead) => lead.startsWith(lower) || lead.startsWith(typed));
   // Once there is something to remind about, the first letter is a capital, the way Siri writes it.
-  const title =
-    cleaned && !isLeadIn ? cleaned.charAt(0).toLocaleUpperCase() + cleaned.slice(1) : text.trim();
+  const hasContent = Boolean(cleaned) && !isLeadIn;
+  // A title that opens with a link keeps it as typed.
+  const opensWithLink = /^(?:https?:\/\/|www\.)/i.test(cleaned);
+  let title = text.trim();
+  if (hasContent) title = opensWithLink ? cleaned : cleaned.charAt(0).toLocaleUpperCase() + cleaned.slice(1);
 
-  return { title, date: date ? date.getTime() : null, hasTime: Boolean(time || timed) };
+  return { title, date: date ? date.getTime() : null, hasTime: Boolean(time || timed), hasContent };
 }

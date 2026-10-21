@@ -22,6 +22,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { useEffect, useRef, useState } from "react";
+import { withoutLinks } from "./links";
 import { findList, findListHint, hintKey } from "./list";
 import { listInstructions, spellingInstructions, titleInstructions } from "./prompts";
 import { isRough, onlyFixesGrammar, onlyRemovesWords } from "./rough";
@@ -40,7 +41,7 @@ function listLabel(list: ReminderList, lists: ReminderList[]): string {
   return shared && list.account ? `${list.title} (${list.account})` : list.title;
 }
 
-// What the helper read: the text with sure spelling fixes, its dates, and words it wasn't sure of.
+// What the helper read: the text with sure spelling fixes, its dates and links, and words it wasn't sure of.
 interface Unsure {
   word: string;
   guesses: string[];
@@ -49,6 +50,7 @@ interface Unsure {
 interface Reading {
   text: string;
   dates: Match[];
+  links: string[];
   unsure: Unsure[];
 }
 
@@ -60,6 +62,8 @@ interface Draft {
   listId: string | null;
   // A list name that isn't one of the person's lists, like "grocery", and the title if no list fits.
   hint: { name: string; title: string } | null;
+  // Web links, which go in the notes.
+  links: string[];
   unsure: Unsure[];
 }
 
@@ -193,7 +197,12 @@ function readDates(text: string, matches: Match[]) {
 }
 
 function draftFor(reading: Reading, lists: ReminderList[]): Draft {
-  const { text, dates: matches, unsure } = reading;
+  const { dates: matches, unsure } = reading;
+  // Links go in the notes, unless there's nothing else to remind about, like "today https://…".
+  const plain = withoutLinks(reading.text, reading.links);
+  const useLinks = reading.links.length > 0 && readDates(plain, matches).hasContent;
+  const links = useLinks ? reading.links : [];
+  const text = useLinks ? plain : reading.text;
   const list = findList(text, lists);
   const hinted = list || lists.length === 0 ? null : findListHint(text);
   const picked = hinted ? pickedList(hinted.name, lists) : null;
@@ -213,6 +222,7 @@ function draftFor(reading: Reading, lists: ReminderList[]): Draft {
     hasTime,
     listId: list?.id ?? picked ?? null,
     hint: hinted ? { name: hinted.name, title: whole } : null,
+    links,
     unsure,
   };
 }
@@ -384,7 +394,7 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
   const { appleIntelligence, fixSpelling, showList, showNotes, showPriority, showEarlyAlert, showRepeat } =
     getPreferenceValues<Preferences.Remind>();
   const [title, setTitle] = useState(draft.title);
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(draft.links.join("\n"));
   const [date, setDate] = useState<Date | null>(draft.date);
   const { lists, failure: listFailure, isLoading: isLoadingLists } = useLists();
   const [listId, setListId] = useState(draft.listId ?? "");
@@ -405,7 +415,7 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
   // rewrites a title that's still rough. Both start together.
   const hint = draft.hint && !draft.listId ? draft.hint : null;
   // With spelling and grammar on, every title goes to the model; otherwise only rough ones.
-  const needsRewrite = (text: string) => fixSpelling || isRough(text);
+  const needsRewrite = (text: string) => fixSpelling || isRough(text, draft.links.length > 0);
   const unsureIn = (text: string) =>
     fixSpelling ? draft.unsure.filter((unsure) => new RegExp(`\\b${escaped(unsure.word)}\\b`, "i").test(text)) : [];
   const [isWorking, setIsWorking] = useState(
@@ -487,7 +497,8 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
     if (draft.hint && (listPicked.current || listChosen.current)) rememberPick(draft.hint.name, listId);
     const reminder = {
       title: finalTitle,
-      notes: showNotes ? notes.trim() : "",
+      // With the Notes field hidden, links still go in the notes.
+      notes: showNotes ? notes.trim() : draft.links.join("\n"),
       listId: showList ? listId : (draft.listId ?? ""),
       due: date ? date.getTime() : null,
       hasTime: Boolean(date) && !allDay,
@@ -603,7 +614,7 @@ function FromText({ text, onEdit }: { text: string; onEdit?: () => void }) {
       .then(([reading, found]) => isCurrent && setDraft(draftFor(reading, found)))
       .catch((failure: Error) => {
         if (!isCurrent) return;
-        setDraft({ text, title: text, date: null, hasTime: false, listId: null, hint: null, unsure: [] });
+        setDraft({ text, title: text, date: null, hasTime: false, listId: null, hint: null, links: [], unsure: [] });
         showToast({ style: Toast.Style.Failure, title: "Date Unavailable", message: failure.message });
       });
     return () => {

@@ -34,6 +34,20 @@ A phrase that only mentions a list, like "make a grocery list", stays in the tit
 
 If lists in two accounts share a name, the List field shows the account next to each. Shared lists you can only view aren't available.
 
+### Links
+
+A web link you type goes in the reminder's notes, not the title. "get coffee and add this link https://example.com" gives "Get coffee", with the link in Notes.
+
+| You type                                | Title        | Notes                          |
+| --------------------------------------- | ------------ | ------------------------------ |
+| read https://example.com/post tomorrow  | Read         | https://example.com/post       |
+| book flights, link: example.com         | Book flights | example.com                    |
+| compare https://a.com and https://b.com | Compare      | https://a.com<br>https://b.com |
+
+Each link gets its own line, and anything you add to Notes goes after them. If the Notes field is turned off in settings, links still go in the notes. If nothing else is left to remind about, like "today https://example.com", the link stays in the title. Email addresses stay in the title.
+
+Reminders has a URL field, but it doesn't show links that other apps put there, so Remind uses Notes.
+
 ### From root search
 
 Type a reminder in Tinycast's root search and go right to the review screen. To set it up, create a quicklink named **Remind** with this link:
@@ -63,15 +77,19 @@ If Remind doesn't appear when you type **remind**, turn on **Show in launcher** 
 
 ## How it works
 
-Remind reads what you type in four steps. Each step uses fixed rules and the macOS spell checker first. Apple Intelligence only steps in where those can't finish the job, and for grammar.
+Remind reads what you type in five steps. Each step uses fixed rules and the macOS spell checker first. Apple Intelligence only steps in where those can't finish the job, and for grammar.
 
-### 1. Spelling
+### 1. Links
 
-With **Spelling and Grammar** on, the macOS spell checker reads what you type first, the same one the rest of your Mac uses. Because it runs before dates are read, a misspelled day like "tommorow" can still become a date, as long as the spell checker is sure of the fix.
+The date detector built into macOS also finds web links, like "https://example.com", "www.example.com" or "example.com", in the same pass as dates, so a date inside a link stays part of the link. Links that aren't web links, like email addresses, stay in the title.
+
+### 2. Spelling
+
+With **Spelling and Grammar** on, the macOS spell checker reads what you type first, the same one the rest of your Mac uses. Because it runs before dates are read, a misspelled day like "tommorow" can still become a date, as long as the spell checker is sure of the fix. Links are never respelled.
 
 When the spell checker is sure of the fix, Remind makes it as you type. When it flags a word but isn't sure, Apple Intelligence picks from the spell checker's own suggestions on the review screen, using the rest of the reminder, or keeps your word. It can't pick anything else.
 
-### 2. Date and time
+### 3. Date and time
 
 The date detector built into macOS finds every date in the text, like "friday", "tomorrow at noon" or "in two weeks". Remind combines them, so a day and a time can sit apart: "today get coffee at 5pm".
 
@@ -86,7 +104,7 @@ A number stays a number after "room", "suite", "apt", "unit", "gate", "flight", 
 
 A reminder has a time only when you name one: "am", "pm", "noon", "midnight", "morning", "afternoon", "evening", "tonight", "at 5", "5:30" or a 24-hour time. Otherwise it's all-day.
 
-### 3. List
+### 4. List
 
 A list counts when you name it with the word "list", and either:
 
@@ -97,10 +115,11 @@ A list whose own name ends in "list", like Reading List, doesn't need the word t
 
 If the name isn't one of your lists, Apple Intelligence picks the list it fits. This only happens for the "on", "to" or "in" form, with a name of one to four words that doesn't include "a", "an", "this", "that", "your", "his", "her", "their" or "its". Once you add the reminder, Remind remembers the list for that name.
 
-### 4. Title
+### 5. Title
 
 Remind takes out, in order:
 
+- Every link, which goes to the notes, along with "link:", "url:" or "add", "attach", "include", "with", "here's" or "here is" followed by "link" or "url" right before it, like "and add this link". Only "and", "&" or a comma between two links goes too.
 - Every date and time it read, and the list phrase. A date inside a list's name, like Today, stays part of the list.
 - "add" at the start, when the list comes after "to", "onto" or "into": "add eggs to the Groceries list" gives "Eggs".
 - "remind me", "remind me to" and "please remind me" at the start.
@@ -114,6 +133,7 @@ If what's left still reads badly, Apple Intelligence rewrites it. A title reads 
 - Starts with "don't forget", "do not forget to", "remember to", "make sure", "I need to", "I have to", "I've got to", "I got to", "I gotta", "I should", "I must", "need to", "have to", "got to", "gotta", "can you", "could you", "would you" or "please".
 - Ends with "after", "before", "with", "to", "from", "about", "and", "or", "the", "a", "an", "of", "until", "during", "than", "but", "so", "my" or "your".
 - Has a stray "'s", like "after 's meeting".
+- Ends with "link", "links" or "url", after a link went to the notes, like "send this link".
 
 With Spelling and Grammar off, Apple Intelligence can only take words out. If its title has a word you didn't type, Remind keeps its own.
 
@@ -126,7 +146,7 @@ Remind uses the on-device Apple Foundation Model only when the rules and the spe
 | Task              | Runs when                                                         | Takes          |
 | ----------------- | ----------------------------------------------------------------- | -------------- |
 | Match a list name | The name isn't one of your lists, and no match is remembered yet. | About a second |
-| Rewrite the title | The title reads badly after step 4.                               | About a second |
+| Rewrite the title | The title reads badly after step 5.                               | About a second |
 | Pick a spelling   | The spell checker flagged a word but isn't sure of the fix.       | About a second |
 | Fix grammar       | Spelling and Grammar is on. Runs on every title.                  | About a second |
 
@@ -138,24 +158,25 @@ Requires macOS 27 with Apple Intelligence turned on. Run this once to accept the
 sudo fm license
 ```
 
-When Apple Intelligence is off, Remind skips all of these. The spell checker still fixes the words it's sure of, list names must match a list exactly, and the title is what's left after step 4.
+When Apple Intelligence is off, Remind skips all of these. The spell checker still fixes the words it's sure of, list names must match a list exactly, and the title is what's left after step 5.
 
 ## How the code works
 
 Remind is a Tinycast extension written in TypeScript, with a small Swift helper for the parts only macOS can do.
 
-| File                         | What it does                                                                                                                |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `src/remind.tsx`             | The typing screen, the review screen and settings. Calls the helper and Apple Intelligence.                                 |
-| `src/when.ts`                | Step 2 and the title cleanup in step 4.                                                                                     |
-| `src/list.ts`                | Step 3: finds a list you named, or a name for Apple Intelligence to match.                                                  |
-| `src/rough.ts`               | Decides when a title reads badly, and checks that a rewrite only made allowed changes.                                      |
-| `src/prompts.ts`             | What Remind asks Apple Intelligence.                                                                                        |
-| `assets/remind-helper.swift` | Fixes spelling with the macOS spell checker, reads dates with the macOS date detector, reads your lists and adds reminders. |
-| `assets/remind-helper.js`    | The same helper as a script, used until the Swift helper is built.                                                          |
-| `assets/list-schema.json`    | The shape of Apple Intelligence's list answer.                                                                              |
-| `assets/title-schema.json`   | The shape of Apple Intelligence's title answer.                                                                             |
-| `assets/word-schema.json`    | The shape of Apple Intelligence's spelling answer.                                                                          |
+| File                         | What it does                                                                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `src/remind.tsx`             | The typing screen, the review screen and settings. Calls the helper and Apple Intelligence.                                  |
+| `src/when.ts`                | Step 3 and the title cleanup in step 5.                                                                                      |
+| `src/links.ts`               | Step 5: takes links and the words that hand them over out of the title.                                                      |
+| `src/list.ts`                | Step 4: finds a list you named, or a name for Apple Intelligence to match.                                                   |
+| `src/rough.ts`               | Decides when a title reads badly, and checks that a rewrite only made allowed changes.                                       |
+| `src/prompts.ts`             | What Remind asks Apple Intelligence.                                                                                         |
+| `assets/remind-helper.swift` | Finds links and dates with the macOS date detector, fixes spelling with the spell checker, reads your lists, adds reminders. |
+| `assets/remind-helper.js`    | The same helper as a script, used until the Swift helper is built.                                                           |
+| `assets/list-schema.json`    | The shape of Apple Intelligence's list answer.                                                                               |
+| `assets/title-schema.json`   | The shape of Apple Intelligence's title answer.                                                                              |
+| `assets/word-schema.json`    | The shape of Apple Intelligence's spelling answer.                                                                           |
 
 The first time Remind runs, it builds the Swift helper in the background with Apple's command line developer tools and keeps it in Tinycast's support folder. Until then, or on a Mac without the tools, the script helper does the same work, a little slower. Remind rebuilds the helper whenever its source changes.
 

@@ -1,4 +1,4 @@
-// Finds the dates in a reminder, lists Reminders lists, and adds reminders. Prints JSON.
+// Finds the dates and links in a reminder, lists Reminders lists, and adds reminders. Prints JSON.
 // Usage: remind-helper detect [--spell] <text>
 //        remind-helper lists
 //        remind-helper add <json>
@@ -20,6 +20,7 @@ struct Unsure: Encodable {
 struct Reading: Encodable {
     let text: String
     let dates: [Detection]
+    let links: [String]
     let unsure: [Unsure]
 }
 
@@ -54,8 +55,8 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
-// Fixes the words the macOS spell checker is sure of, and lists the ones it isn't.
-func spellCheck(_ text: String) -> (String, [Unsure]) {
+// Fixes the words the macOS spell checker is sure of, and lists the ones it isn't. Links are left alone.
+func spellCheck(_ text: String, skipping links: [NSRange]) -> (String, [Unsure]) {
     let checker = NSSpellChecker.shared
     guard checker.setLanguage("en") else { return (text, []) }
     let original = text as NSString
@@ -66,6 +67,8 @@ func spellCheck(_ text: String) -> (String, [Unsure]) {
         let range = checker.checkSpelling(of: text, startingAt: start)
         // The search wraps around to the start, so a match behind the last one means it's done.
         if range.location == NSNotFound || range.location < start { break }
+        start = range.location + range.length
+        if links.contains(where: { NSIntersectionRange($0, range).length > 0 }) { continue }
         let word = original.substring(with: range)
         if let fix = checker.correction(forWordRange: range, in: text, language: "en", inSpellDocumentWithTag: 0) {
             fixes.append((range, fix))
@@ -73,27 +76,42 @@ func spellCheck(_ text: String) -> (String, [Unsure]) {
             let guesses = checker.guesses(forWordRange: range, in: text, language: "en", inSpellDocumentWithTag: 0) ?? []
             if !guesses.isEmpty { unsure.append(Unsure(word: word, guesses: Array(guesses.prefix(5)))) }
         }
-        start = range.location + range.length
     }
     let fixed = NSMutableString(string: text)
     for (range, fix) in fixes.reversed() { fixed.replaceCharacters(in: range, with: fix) }
     return (fixed as String, unsure)
 }
 
-// Every date in the text, in order. Remind combines them, so "today" and "at 5" can come apart.
-func dates(in text: String) -> [Detection] {
-    let detector = try! NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue)
-    return detector.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap {
-        match -> Detection? in
-        guard let date = match.date, let range = Range(match.range, in: text) else { return nil }
-        return Detection(date: date.timeIntervalSince1970 * 1000, matched: String(text[range]))
+struct Found {
+    var dates: [Detection] = []
+    var links: [String] = []
+    var linkRanges: [NSRange] = []
+}
+
+// Every date and web link in the text, in order. Remind combines the dates, so "today" and "at 5" can
+// come apart. Both are read in one pass, so a date inside a link stays part of the link.
+func find(in text: String) -> Found {
+    let types = NSTextCheckingResult.CheckingType.date.rawValue | NSTextCheckingResult.CheckingType.link.rawValue
+    let detector = try! NSDataDetector(types: types)
+    var found = Found()
+    for match in detector.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+        guard let range = Range(match.range, in: text) else { continue }
+        if let date = match.date {
+            found.dates.append(Detection(date: date.timeIntervalSince1970 * 1000, matched: String(text[range])))
+        } else if let scheme = match.url?.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+            // Web links only, so an email address stays in the title.
+            found.links.append(String(text[range]))
+            found.linkRanges.append(match.range)
+        }
     }
+    return found
 }
 
 // Spelling comes first, so a fixed "tommorow" is read as a date.
 func detect(_ text: String, spell: Bool) {
-    let (fixed, unsure) = spell ? spellCheck(text) : (text, [])
-    emit(Reading(text: fixed, dates: dates(in: fixed), unsure: unsure))
+    let (fixed, unsure) = spell ? spellCheck(text, skipping: find(in: text).linkRanges) : (text, [])
+    let found = find(in: fixed)
+    emit(Reading(text: fixed, dates: found.dates, links: found.links, unsure: unsure))
 }
 
 // Asks once, then needs full access. The answer can arrive on the main queue, so the run loop keeps turning.

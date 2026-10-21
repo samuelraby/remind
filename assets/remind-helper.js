@@ -6,8 +6,8 @@ const reminderEntity = 1;
 const fullAccess = 3;
 const frequencies = { daily: 0, weekly: 1, monthly: 2, yearly: 3 };
 
-// Fixes the words the macOS spell checker is sure of, and lists the ones it isn't.
-function spellCheck(text) {
+// Fixes the words the macOS spell checker is sure of, and lists the ones it isn't. Links are left alone.
+function spellCheck(text, links) {
   ObjC.import("AppKit");
   const checker = $.NSSpellChecker.sharedSpellChecker;
   if (!checker.setLanguage("en")) return { text, unsure: [] };
@@ -22,6 +22,8 @@ function spellCheck(text) {
     const length = Number(range.length);
     // The search wraps around to the start, so a match behind the last one means it's done.
     if (length === 0 || location < start) break;
+    start = location + length;
+    if (links.some((link) => location < link.location + link.length && link.location < location + length)) continue;
     const word = text.substr(location, length);
     const nsRange = { location, length };
     const fix = checker.correctionForWordRangeInStringLanguageInSpellDocumentWithTag(nsRange, string, "en", 0);
@@ -32,7 +34,6 @@ function spellCheck(text) {
       const guesses = found.isNil() ? [] : ObjC.deepUnwrap(found).slice(0, 5);
       if (guesses.length) unsure.push({ word, guesses });
     }
-    start = location + length;
   }
   let fixed = text;
   for (const { location, length, fix } of fixes.reverse()) {
@@ -41,26 +42,38 @@ function spellCheck(text) {
   return { text: fixed, unsure };
 }
 
-// Every date in the text, in order. Remind combines them, so "today" and "at 5" can come apart.
-function dates(text) {
-  const detector = $.NSDataDetector.dataDetectorWithTypesError(8, null);
+// Every date and web link in the text, in order. Remind combines the dates, so "today" and "at 5" can
+// come apart. Both are read in one pass, so a date inside a link stays part of the link.
+function find(text) {
+  const dateType = 8;
+  const linkType = 32;
+  const detector = $.NSDataDetector.dataDetectorWithTypesError(dateType | linkType, null);
   const matches = detector.matchesInStringOptionsRange($(text), 0, { location: 0, length: text.length });
-  const found = [];
+  const found = { dates: [], links: [], linkRanges: [] };
   for (let index = 0; index < matches.count; index++) {
     const match = matches.objectAtIndex(index);
-    if (match.date.isNil()) continue;
     // Struct fields arrive here as strings ("0"), so convert them to numbers.
-    const start = Number(match.range.location);
+    const location = Number(match.range.location);
     const length = Number(match.range.length);
-    found.push({ date: Number(match.date.timeIntervalSince1970) * 1000, matched: text.substr(start, length) });
+    const matched = text.substr(location, length);
+    if (Number(match.resultType) === dateType && !match.date.isNil()) {
+      found.dates.push({ date: Number(match.date.timeIntervalSince1970) * 1000, matched });
+    } else if (Number(match.resultType) === linkType && !match.URL.isNil()) {
+      // Web links only, so an email address stays in the title.
+      const scheme = match.URL.scheme.isNil() ? "" : match.URL.scheme.js.toLowerCase();
+      if (scheme !== "http" && scheme !== "https") continue;
+      found.links.push(matched);
+      found.linkRanges.push({ location, length });
+    }
   }
   return found;
 }
 
 // Spelling comes first, so a fixed "tommorow" is read as a date.
 function detect(text, spell) {
-  const checked = spell ? spellCheck(text) : { text, unsure: [] };
-  return { text: checked.text, dates: dates(checked.text), unsure: checked.unsure };
+  const checked = spell ? spellCheck(text, find(text).linkRanges) : { text, unsure: [] };
+  const found = find(checked.text);
+  return { text: checked.text, dates: found.dates, links: found.links, unsure: checked.unsure };
 }
 
 // The script helper can't ask for access, so it needs access granted already.

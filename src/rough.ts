@@ -54,10 +54,17 @@ const startsWithLeadIn = new RegExp(`^(?:${leadIns.map((lead) => lead.replace(/'
 const endsDangling = new RegExp(`\\b(?:${danglingWords.join("|")})$`, "i");
 // "after 's meeting": a possessive whose owner was a date the rules took out.
 const strayPossessive = /(?:^|\s)['’]s\b/i;
+// "send this link", once the link itself went to the notes.
+const endsWithLinkWord = /\b(?:link|links|url)$/i;
 
-export function isRough(title: string): boolean {
+export function isRough(title: string, hadLinks = false): boolean {
   const text = title.trim();
-  return startsWithLeadIn.test(text) || endsDangling.test(text) || strayPossessive.test(text);
+  return (
+    startsWithLeadIn.test(text) ||
+    endsDangling.test(text) ||
+    strayPossessive.test(text) ||
+    (hadLinks && endsWithLinkWord.test(text))
+  );
 }
 
 function words(text: string): string[] {
