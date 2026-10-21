@@ -22,7 +22,7 @@ Name a list, including the word "list", to add the reminder to it.
 | You type                       | List      | Title         |
 | ------------------------------ | --------- | ------------- |
 | get coffee on my Errands list  | Errands   | get coffee    |
-| add eggs to the Groceries list | Groceries | add eggs      |
+| add eggs to the Groceries list | Groceries | eggs          |
 | Work list send the deck        | Work      | send the deck |
 
 The list must already exist in Reminders. Capitalization, spaces, and symbols don't matter, so "sideprojects" finds Side Projects.

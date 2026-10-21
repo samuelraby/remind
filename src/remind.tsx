@@ -200,7 +200,11 @@ function draftFor(text: string, matches: Match[], lists: ReminderList[]): Draft 
   const hinted = list || lists.length === 0 ? null : findListHint(text);
   const picked = hinted ? pickedList(hinted.name, lists) : null;
   const cut = list ?? hinted;
-  const rest = cut ? `${text.slice(0, cut.start)} ${text.slice(cut.end)}` : text;
+  let rest = cut ? `${text.slice(0, cut.start)} ${text.slice(cut.end)}` : text;
+  // "add eggs to my Groceries list" is about the list, so "add" goes with it, the way Siri reads it.
+  if (cut && /^(?:to|onto|into)\b/i.test(text.slice(cut.start))) {
+    rest = rest.replace(/^(\s*(?:please\s+)?(?:remind\s+me(?:\s+to)?\s+)?)add\s+/i, "$1");
+  }
   const { title, date, hasTime } = readDates(rest, matches);
   const askModel = hinted && !picked && getPreferenceValues<Preferences.Remind>().appleIntelligence;
   return {
