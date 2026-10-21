@@ -7,12 +7,15 @@ import {
   Form,
   getPreferenceValues,
   Icon,
+  launchCommand,
   LaunchProps,
+  LaunchType,
   List,
   popToRoot,
   showHUD,
   showToast,
   Toast,
+  useNavigation,
 } from "@raycast/api";
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -376,7 +379,12 @@ function normalizeTitle(title: string): string {
   return title.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 }
 
-function Review({ draft }: { draft: Draft }) {
+// Back to the typing screen with the sentence as typed, so it can be fixed and read again.
+function EditTextAction({ onEdit }: { onEdit: () => void }) {
+  return <Action title="Edit Text" icon={Icon.Pencil} shortcut={{ modifiers: ["cmd"], key: "e" }} onAction={onEdit} />;
+}
+
+function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
   const { appleIntelligence, showList, showNotes, showPriority, showEarlyAlert, showRepeat } =
     getPreferenceValues<Preferences.Remind>();
   const [title, setTitle] = useState(draft.title);
@@ -523,6 +531,7 @@ function Review({ draft }: { draft: Draft }) {
       actions={
         <ActionPanel>
           <Action.SubmitForm title="Add Reminder" icon={Icon.Plus} onSubmit={add} />
+          <EditTextAction onEdit={onEdit} />
           <ClearCacheAction />
         </ActionPanel>
       }
@@ -619,15 +628,21 @@ function FromText({ text }: { text: string }) {
       });
   }, []);
 
-  return draft ? <Review draft={draft} /> : <Form isLoading />;
+  // Opened from root search there's no typing screen underneath, so Remind reopens on one.
+  const edit = () =>
+    launchCommand({ name: "remind", type: LaunchType.UserInitiated, fallbackText: text, context: { edit: true } });
+
+  return draft ? <Review draft={draft} onEdit={edit} /> : <Form isLoading />;
 }
 
-export default function Command(props: LaunchProps) {
+export default function Command(props: LaunchProps<{ launchContext: { edit?: boolean } }>) {
   const fallbackText = props.fallbackText?.trim();
-  return fallbackText ? <FromText text={fallbackText} /> : <Search />;
+  // Tinycast puts the text in the search field itself, so editing opens the typing screen.
+  return fallbackText && !props.launchContext?.edit ? <FromText text={fallbackText} /> : <Search />;
 }
 
 function Search() {
+  const { pop } = useNavigation();
   const [searchText, setSearchText] = useState("");
   const [found, setFound] = useState<{ text: string; matches: Match[] } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -691,7 +706,7 @@ function Search() {
           accessories={accessories}
           actions={
             <ActionPanel>
-              <Action.Push title="Review Reminder" icon={Icon.Pencil} target={<Review draft={draft} />} />
+              <Action.Push title="Review Reminder" icon={Icon.Pencil} target={<Review draft={draft} onEdit={pop} />} />
               <ClearCacheAction />
             </ActionPanel>
           }

@@ -12,6 +12,7 @@ Type a reminder, like "pick up dry cleaning friday at 5", and Remind shows the d
 | -------- | ----------------------------- |
 | ↵        | Open the review screen        |
 | ⌘↵       | Add the reminder              |
+| ⌘E       | Edit what you typed           |
 | Esc      | Go back                       |
 | ⇧⌫       | Clear remembered list matches |
 
