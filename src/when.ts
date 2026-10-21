@@ -130,7 +130,8 @@ export function when(text: string, matches: Match[], now = new Date()): When {
   const cleaned = rest.replace(edges, "").replace(leading, "").replace(trailing, "").replace(edges, "");
   // "remind me today", or "remin" on the way to "remind me to", has nothing to remind about yet.
   const lower = cleaned.toLowerCase();
-  const isLeadIn = leadInsTyped.some((lead) => lead.startsWith(lower));
+  const typed = rest.replace(edges, "").toLowerCase();
+  const isLeadIn = leadInsTyped.some((lead) => lead.startsWith(lower) || lead.startsWith(typed));
   // Once there is something to remind about, the first letter is a capital, the way Siri writes it.
   const title =
     cleaned && !isLeadIn ? cleaned.charAt(0).toLocaleUpperCase() + cleaned.slice(1) : text.trim();
