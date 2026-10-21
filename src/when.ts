@@ -5,7 +5,7 @@ export interface Match {
   matched: string;
 }
 
-export interface When {
+interface When {
   title: string;
   date: number | null;
   hasTime: boolean;

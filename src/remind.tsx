@@ -204,14 +204,15 @@ function draftFor(reading: Reading, lists: ReminderList[]): Draft {
     rest = rest.replace(/^(\s*(?:please\s+)?(?:remind\s+me(?:\s+to)?\s+)?)add\s+/i, "$1");
   }
   const { title, date, hasTime } = readDates(rest, matches);
-  const askModel = hinted && !picked && getPreferenceValues<Preferences.Remind>().appleIntelligence;
+  const whole = hinted ? readDates(text, matches).title : title;
+  const willAsk = hinted && !picked && getPreferenceValues<Preferences.Remind>().appleIntelligence;
   return {
     text,
-    title: hinted && !picked && !askModel ? readDates(text, matches).title : title,
+    title: hinted && !picked && !willAsk ? whole : title,
     date: date === null ? null : new Date(date),
     hasTime,
     listId: list?.id ?? picked ?? null,
-    hint: hinted ? { name: hinted.name, title: readDates(text, matches).title } : null,
+    hint: hinted ? { name: hinted.name, title: whole } : null,
     unsure,
   };
 }
@@ -443,6 +444,7 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
 
     Promise.all([picking, polish(draft.title)])
       .then(async ([picked, polished]) => {
+        if (!isCurrent) return;
         let next = polished;
         if (hint && picked) {
           listPicked.current = true;
@@ -594,14 +596,19 @@ function FromText({ text, onEdit }: { text: string; onEdit?: () => void }) {
   const [draft, setDraft] = useState<Draft | null>(null);
 
   useEffect(() => {
+    let isCurrent = true;
     const known = cachedLists();
     const lists = known.length > 0 ? Promise.resolve(known) : loadLists().catch(() => []);
     Promise.all([detect(text), lists])
-      .then(([reading, found]) => setDraft(draftFor(reading, found)))
+      .then(([reading, found]) => isCurrent && setDraft(draftFor(reading, found)))
       .catch((failure: Error) => {
+        if (!isCurrent) return;
         setDraft({ text, title: text, date: null, hasTime: false, listId: null, hint: null, unsure: [] });
         showToast({ style: Toast.Style.Failure, title: "Date Unavailable", message: failure.message });
       });
+    return () => {
+      isCurrent = false;
+    };
   }, []);
 
   // Opened from root search there's no typing screen underneath, so Remind reopens on one.

@@ -1,12 +1,12 @@
 // Finds a Reminders list named in what you type, like "on my Errands list", and where it sits.
 
-export interface NamedList {
+interface NamedList {
   id: string;
   title: string;
   isDefault?: boolean;
 }
 
-export interface ListMatch {
+interface ListMatch {
   id: string;
   start: number;
   end: number;
@@ -86,7 +86,7 @@ export function findList(text: string, lists: NamedList[]): ListMatch | null {
   return best ? { id: best.id, start: best.start, end: best.end } : null;
 }
 
-export interface ListHint {
+interface ListHint {
   name: string;
   start: number;
   end: number;

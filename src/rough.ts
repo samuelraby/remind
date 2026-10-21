@@ -1,7 +1,7 @@
 // When a title still reads badly after the rules have cleaned it, Apple Intelligence rewrites it.
 
 // Words that start a reminder without being part of it.
-export const leadIns = [
+const leadIns = [
   "don't forget to",
   "don't forget",
   "dont forget to",
@@ -28,7 +28,7 @@ export const leadIns = [
 ];
 
 // Words that leave a title hanging when they come last.
-export const danglingWords = [
+const danglingWords = [
   "after",
   "before",
   "with",
@@ -72,7 +72,7 @@ export function onlyRemovesWords(before: string, after: string): boolean {
 }
 
 // Small words grammar fixes may add, like "from" in "pick up kids from school".
-export const grammarWords = ["a", "an", "the", "to", "from", "at", "in", "on", "for", "of", "with", "and", "is", "are"];
+const grammarWords = ["a", "an", "the", "to", "from", "at", "in", "on", "for", "of", "with", "and", "is", "are"];
 const addable = new Set(grammarWords);
 
 // With Spelling and Grammar on, a rewrite may also add small grammar words. Spelling is the spell
