@@ -73,33 +73,6 @@ const toolchains = [
 // Compiles, renames and stamps in one step, so it finishes even if the window closes first.
 const buildScript = 't="$4.building"; "$1" -sdk "$2" -O "$3" -o "$t" && mv -f "$t" "$4" && printf %s "$5" > "$4.source-hash"';
 
-// Written to Apple's guidance for the on-device model: a role, one direct task, simple examples,
-// and the key rule repeated last. Notes are left out entirely when the Notes field is off.
-function titleInstructions(withNotes: boolean): string {
-  const examples = [
-    ["get coffee", "Get coffee", ""],
-    ["pick up dry cleaning", "Pick up dry cleaning", ""],
-    ["review slides after 's meeting", "Review slides after meeting", ""],
-    ["call the dentist 555 123 4567", "Call the dentist", "555 123 4567"],
-    ["send the deck to the team https://example.com/deck", "Send the deck to the team", "https://example.com/deck"],
-  ].filter(([, , notes]) => withNotes || !notes);
-  const shown = examples.map(([text, title, notes]) =>
-    withNotes ? `${text} → {title: "${title}", notes: "${notes}"}` : `${text} → {title: "${title}"}`,
-  );
-  return [
-    "You are an expert at writing reminders. Rewrite the person's text as a short reminder title.",
-    "Start with a capital letter. Keep their words in their order. Remove only words that no longer make sense.",
-    ...(withNotes
-      ? ["Move a phone number, address or link to notes. Never put a time or date in notes. Otherwise leave notes empty."]
-      : []),
-    "",
-    "Examples:",
-    ...shown,
-    "",
-    "Do not add words the person didn't write.",
-  ].join("\n");
-}
-
 // Dates go stale ("tomorrow"), so detections are kept only while Remind is open.
 const detections = new Map<string, Match[]>();
 let sourceHash: string | undefined;
@@ -338,23 +311,6 @@ function askModel(instructions: string, schema: string, prompt: string): Promise
   );
 }
 
-async function writeTitle(text: string, withNotes: boolean): Promise<{ title: string; notes: string }> {
-  const answer = await askModel(
-    titleInstructions(withNotes),
-    withNotes ? "title-notes-schema.json" : "title-schema.json",
-    `Text: ${text}`,
-  );
-  const said = String(answer.title ?? "")
-    .replace(/^(?:reminder|text):\s*/i, "")
-    .trim();
-  // The model doesn't always follow "start with a capital letter", so Remind makes sure.
-  const title = said.charAt(0).toLocaleUpperCase() + said.slice(1);
-  const notes = String(answer.notes ?? "").trim();
-  // A bare number, like a time the model misread, isn't a note; a phone number has seven digits or more.
-  const isNumber = !/\p{L}/u.test(notes) && notes.replace(/\D/g, "").length < 7;
-  return { title, notes: isNumber ? "" : notes };
-}
-
 const listInstructions = [
   "You are an expert at organizing reminders. Match the list name the person said to one of their lists.",
   "Answer with the list it means. If no list fits, answer None.",
@@ -393,12 +349,10 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
   const [date, setDate] = useState<Date | null>(draft.date);
   const { lists, failure: listFailure, isLoading: isLoadingLists } = useLists();
   const [listId, setListId] = useState(draft.listId ?? "");
-  const [isWriting, setIsWriting] = useState(appleIntelligence);
   const [isAdding, setIsAdding] = useState(false);
   // All-day when the words name a day without a time, the way Calendar does it.
   const [allDay, setAllDay] = useState(draft.date !== null && !draft.hasTime);
   const titleEdited = useRef(false);
-  const notesEdited = useRef(false);
   const listChosen = useRef(false);
   const listPicked = useRef(false);
   const shownTitle = useRef(draft.title);
@@ -408,44 +362,34 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
     setTitle(value);
   }
 
-  // A list name that isn't a list goes to the model first; the title follows from what it decides.
+  // A list name that isn't one of the lists, like "grocery", goes to the on-device model.
   const [isPicking, setIsPicking] = useState(Boolean(draft.hint && !draft.listId && appleIntelligence));
 
   useEffect(() => {
-    if (!appleIntelligence) return;
-    let isCurrent = true;
     const hint = draft.hint && !draft.listId ? draft.hint : null;
+    if (!appleIntelligence || !hint) return;
+    let isCurrent = true;
     const known = cachedLists();
-    const picking = hint
-      ? (known.length > 0 ? Promise.resolve(known) : loadLists())
-          .then((found) => pickList(hint.name, found))
-          .catch(() => null)
-      : Promise.resolve(draft.listId);
-    picking
+    (known.length > 0 ? Promise.resolve(known) : loadLists())
+      .then((found) => pickList(hint.name, found))
+      .catch((failure: Error) => {
+        if (isCurrent && !warnedAboutAppleIntelligence) {
+          warnedAboutAppleIntelligence = true;
+          showToast({ style: Toast.Style.Failure, title: "Apple Intelligence Unavailable", message: failure.message });
+        }
+        return null;
+      })
       .then((picked) => {
-        if (!isCurrent) return "";
+        if (!isCurrent) return;
         setIsPicking(false);
-        if (!hint) return draft.title;
         if (picked) {
           listPicked.current = true;
           setListId(picked);
-          return draft.title;
+        } else if (!titleEdited.current) {
+          // No list fits, so the words go back into the title.
+          showTitle(hint.title);
         }
-        if (!titleEdited.current) showTitle(hint.title);
-        return hint.title;
-      })
-      .then((text) => (isCurrent && text ? writeTitle(text, showNotes) : Promise.reject(null)))
-      .then((answer) => {
-        if (!isCurrent) return;
-        if (answer.title && !titleEdited.current) showTitle(answer.title);
-        if (answer.notes && showNotes && !notesEdited.current) setNotes(answer.notes);
-      })
-      .catch((failure: Error | null) => {
-        if (!failure || !isCurrent || warnedAboutAppleIntelligence) return;
-        warnedAboutAppleIntelligence = true;
-        showToast({ style: Toast.Style.Failure, title: "Apple Intelligence Unavailable", message: failure.message });
-      })
-      .finally(() => isCurrent && setIsWriting(false));
+      });
     return () => {
       isCurrent = false;
     };
@@ -499,7 +443,7 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
 
   return (
     <Form
-      isLoading={isWriting || isPicking || (showList && isLoadingLists && lists.length === 0) || isAdding}
+      isLoading={isPicking || (showList && isLoadingLists && lists.length === 0) || isAdding}
       actions={
         <ActionPanel>
           <Action.SubmitForm title="Add Reminder" icon={Icon.Plus} onSubmit={add} />
@@ -513,7 +457,7 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
         title="Title"
         value={title}
         onChange={(value) => {
-          // Tinycast can echo a value Remind set; only a real edit keeps Apple Intelligence's title out.
+          // Tinycast can echo a value Remind set; only a real edit keeps the person's title.
           if (value === shownTitle.current) return;
           titleEdited.current = true;
           showTitle(value);
@@ -547,10 +491,7 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
           id="notes"
           title="Notes"
           value={notes}
-          onChange={(value) => {
-            notesEdited.current = true;
-            setNotes(value);
-          }}
+          onChange={setNotes}
         />
       ) : null}
       {showPriority ? (

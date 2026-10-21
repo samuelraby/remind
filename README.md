@@ -53,7 +53,7 @@ If Remind doesn't appear when you type **remind**, turn on **Show in launcher** 
 
 | Setting            | Default | Description                                                                  |
 | ------------------ | ------- | ---------------------------------------------------------------------------- |
-| Apple Intelligence | On      | Writes titles and matches list names with the on-device model.               |
+| Apple Intelligence | On      | Matches list names to your lists with the on-device model.                   |
 | List               | On      | Shows the List field on the review screen.                                   |
 | Notes              | On      | Shows the Notes field on the review screen.                                  |
 | Priority           | Off     | Shows the Priority field on the review screen.                               |
@@ -62,7 +62,7 @@ If Remind doesn't appear when you type **remind**, turn on **Show in launcher** 
 
 ### Apple Intelligence
 
-Remind uses the on-device Apple Foundation Model to write titles and to match list names to your lists. Dates come from the macOS date detector.
+Remind uses the on-device Apple Foundation Model to match list names, like "grocery", to your lists. Dates and times come from the macOS date detector, and the title is what you type.
 
 Requires macOS 27 with Apple Intelligence turned on. Run this once to accept the Foundation Models terms:
 
@@ -70,7 +70,7 @@ Requires macOS 27 with Apple Intelligence turned on. Run this once to accept the
 sudo fm license
 ```
 
-When Apple Intelligence is off, Remind uses your text as the title, without the date.
+When Apple Intelligence is off, only names that match a list exactly are used.
 
 ## Install
 
