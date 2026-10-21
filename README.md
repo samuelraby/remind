@@ -8,13 +8,27 @@ Create a reminder without leaving the keyboard. Remind is a [Tinycast](https://g
 
 Type a reminder, like "pick up dry cleaning friday at 5", and Remind shows the date as you type. Press ↵ to open the review screen, where you can change anything before the reminder is added.
 
-To add it to a list, name the list with the word "list": "on my Work list", "to the Groceries list", or "Work list" at the start. The list has to exist in Reminders.
-
 | Shortcut | Action                 |
 | -------- | ---------------------- |
 | ↵        | Open the review screen |
 | ⌘↵       | Add the reminder       |
 | Esc      | Go back                |
+
+### Lists
+
+Name a list, including the word "list", to add the reminder to it.
+
+| You type                         | List       | Title         |
+| -------------------------------- | ---------- | ------------- |
+| get coffee on my Errands list | Errands | get coffee    |
+| add eggs to the Groceries list   | Groceries  | add eggs      |
+| Work list send the deck          | Work       | send the deck |
+
+The list must already exist in Reminders. Capitalization, spaces, and symbols don't matter, so "Errands" finds Errands.
+
+A phrase that only mentions a list, like "make a grocery list", stays in the title. A list named like a date, such as Today, doesn't set the date.
+
+If lists in two accounts share a name, the List field shows the account next to each. Shared lists you can only view aren't available.
 
 ### From root search
 

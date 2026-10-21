@@ -172,3 +172,9 @@ test("typing keeps what the titles share and types the rest", () => {
   assert.ok(typingFrames("x", "Review slides after meeting").length <= 8);
   assert.equal(typingFrames("long old title", "Short").at(-1), "Short");
 });
+
+test("the README's list examples", () => {
+  assert.deepEqual([read("get coffee on my Errands list").list, read("get coffee on my Errands list").title], ["cc", "get coffee"]);
+  assert.deepEqual([read("add eggs to the Groceries list").list, read("add eggs to the Groceries list").title], ["groceries", "add eggs"]);
+  assert.deepEqual([read("Work list send the deck").list, read("Work list send the deck").title], ["work", "send the deck"]);
+});
