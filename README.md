@@ -16,13 +16,18 @@ Type a reminder, like "pick up dry cleaning friday at 5", and Remind shows the d
 
 ### From root search
 
-Type a reminder straight into Tinycast's root search and go right to the review. To set it up, create a quicklink named **Remind** with this link:
+Type a reminder in Tinycast's root search and go right to the review. To set it up, create a quicklink named **Remind** with this link:
 
 ```
-tinycast://extensions/samuel/remind/remind?fallbackText={argument}
+tinycast://extensions/samuel/remind/remind?fallbackText={argument name="Reminder"}
 ```
 
-Then type a reminder in root search and choose **Use "…" with Remind**. To make it the first fallback, move **Remind** to the top in **Settings › Fallbacks**.
+Then use it either way:
+
+- Type **remind**, press ⇥, type the reminder in the **Reminder** field, and press ↵.
+- Type the reminder and choose **Use "…" with Remind**. To make it the first fallback, move **Remind** to the top in **Settings › Fallbacks**.
+
+If Remind doesn't appear when you type **remind**, turn on **Show in launcher** in **Settings › Quicklinks**.
 
 ### Settings
 
