@@ -6,7 +6,7 @@ Create a reminder without leaving the keyboard. Remind is a [Tinycast](https://g
 
 ## What it does
 
-Type a reminder, like "pick up dry cleaning friday at 5", and Remind shows the date as you type. Press ↵ to open the review screen, where you can change anything before the reminder is added.
+Type a reminder, like "pick up dry cleaning friday at 5", and Remind shows the title, date and list as you type. Press ↵ to open the review screen, where you can change the title, date, list and notes before the reminder is added. Priority, Early Alert and Repeat appear there when you turn them on in settings.
 
 | Shortcut | Action                 |
 | -------- | ---------------------- |
@@ -109,7 +109,7 @@ If what's left still reads badly, Apple Intelligence rewrites it. A title reads 
 - Ends with "after", "before", "with", "to", "from", "about", "and", "or", "the", "a", "an", "of", "until", "during", "than", "but", "so", "my" or "your".
 - Has a stray "'s", like "after 's meeting".
 
-Apple Intelligence can only take words out. If its title has a word you didn't type, Remind keeps its own.
+With Spelling and Grammar off, Apple Intelligence can only take words out. If its title has a word you didn't type, Remind keeps its own.
 
 With **Spelling and Grammar** on, Apple Intelligence also corrects every title, not only the ones that read badly. It may respell a word of five letters or more, one letter for every four, so "cofee" becomes "coffee" and "recieve" becomes "receive". It may add "a", "an", "the", "to", "from", "at", "in", "on", "for", "of", "with", "and", "is" or "are". Shorter words must stay as typed, so "ice" can't become "rice". Any other change, and Remind keeps its own title.
 
@@ -123,7 +123,7 @@ Remind uses the on-device Apple Foundation Model only when the rules above can't
 | Rewrite the title            | The title reads badly after step 3.                               | About a second |
 | Correct spelling and grammar | Spelling and Grammar is on. Runs on every title.                  | About a second |
 
-They run together on the review screen, never while you type. They never change the date, the time or your notes. Everything else opens instantly.
+They run together on the review screen, never while you type, and the screen shows a loading bar until they finish. They never change the date, the time or your notes. Everything else opens instantly.
 
 Requires macOS 27 with Apple Intelligence turned on. Run this once to accept the Foundation Models terms:
 
@@ -159,6 +159,13 @@ Remind keeps three things on your Mac:
 - **Dates it has read**, while Remind is open, so going back over text is instant.
 
 ⇧⌫ clears all three.
+
+## Requirements
+
+- [Tinycast](https://github.com/abue-ammar/tinycast).
+- Access to Reminders.
+- macOS 27 with Apple Intelligence turned on, for the Apple Intelligence features. Without it, Remind uses its rules alone.
+- Apple's command line developer tools, for the faster helper. Without them, Remind uses the script helper. To install them, run `xcode-select --install`.
 
 ## Install
 
