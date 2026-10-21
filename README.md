@@ -101,7 +101,7 @@ Remind takes out, in order:
 - "on", "at", "by", "for", "in", "due", "before", "around", "this" and "next" left over at the start or end.
 - Stray punctuation at the start or end.
 
-If nothing is left, the title is everything you typed. The first letter is always a capital, the way Siri writes it.
+Once there is something to remind about, the first letter is a capital, the way Siri writes it. Until then, like "remind me today", the title is what you typed.
 
 If what's left still reads badly, Apple Intelligence rewrites it. A title reads badly when it:
 

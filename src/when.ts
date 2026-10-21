@@ -20,7 +20,8 @@ const fourDigitTime = /\b(?:at|by|before|around)\s+([01]\d|2[0-3])([0-5]\d)\b(?:
 const colonTime = /(?:\b(?:at|by|before|around)\s+)?\b(1[3-9]|2[0-3]|0\d):([0-5]\d)\b/i;
 
 const leftoverWords = "on|at|by|for|in|due|before|around|this|next";
-const leading = new RegExp(`^(?:(?:please\\s+)?remind me(?:\\s+to)?[\\s,:]+|(?:${leftoverWords})\\s+)+`, "i");
+const leading = new RegExp(`^(?:(?:please\\s+)?remind me(?:\\s+to)?(?:[\\s,:]+|$)|(?:${leftoverWords})\\s+)+`, "i");
+const leadInsTyped = ["remind me to", "please remind me to"];
 const edges = /^[\s,;:.\-–—]+|[\s,;:.\-–—]+$/g;
 const trailing = new RegExp(`(?:\\s+(?:${leftoverWords}))+$`, "i");
 
@@ -126,9 +127,13 @@ export function when(text: string, matches: Match[], now = new Date()): When {
     .replace(/([,;:])(?=[,;:.!?])/g, "")
     .replace(/\s+/g, " ")
     .trim();
-  const cleaned = rest.replace(edges, "").replace(leading, "").replace(trailing, "").replace(edges, "") || text.trim();
-  // The first letter is a capital, the way Siri and Reminders write a title.
-  const title = cleaned.charAt(0).toLocaleUpperCase() + cleaned.slice(1);
+  const cleaned = rest.replace(edges, "").replace(leading, "").replace(trailing, "").replace(edges, "");
+  // "remind me today", or "remin" on the way to "remind me to", has nothing to remind about yet.
+  const lower = cleaned.toLowerCase();
+  const isLeadIn = leadInsTyped.some((lead) => lead.startsWith(lower));
+  // Once there is something to remind about, the first letter is a capital, the way Siri writes it.
+  const title =
+    cleaned && !isLeadIn ? cleaned.charAt(0).toLocaleUpperCase() + cleaned.slice(1) : text.trim();
 
   return { title, date: date ? date.getTime() : null, hasTime: Boolean(time || timed) };
 }
