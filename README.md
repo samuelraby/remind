@@ -18,13 +18,13 @@ Type a reminder, like "pick up dry cleaning friday at 5", and Remind shows the d
 
 Name a list, including the word "list", to add the reminder to it.
 
-| You type                         | List       | Title         |
-| -------------------------------- | ---------- | ------------- |
-| get coffee on my Errands list | Errands | get coffee    |
-| add eggs to the Groceries list   | Groceries  | add eggs      |
-| Work list send the deck          | Work       | send the deck |
+| You type                       | List      | Title         |
+| ------------------------------ | --------- | ------------- |
+| get coffee on my Errands list  | Errands   | get coffee    |
+| add eggs to the Groceries list | Groceries | add eggs      |
+| Work list send the deck        | Work      | send the deck |
 
-The list must already exist in Reminders. Capitalization, spaces, and symbols don't matter, so "Errands" finds Errands.
+The list must already exist in Reminders. Capitalization, spaces, and symbols don't matter, so "sideprojects" finds Side Projects.
 
 A phrase that only mentions a list, like "make a grocery list", stays in the title. A list named like a date, such as Today, doesn't set the date.
 

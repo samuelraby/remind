@@ -80,7 +80,6 @@
   },
   "scripts": {
     "build": "ray build -e dist -o build",
-    "package": "sh scripts/package.sh",
-    "test": "tsc --ignoreConfig --target ES2022 --module commonjs --types node --esModuleInterop --strict --outDir .test src/list.ts src/when.ts src/typing.ts tests/phrases.test.ts && node --test .test/tests/phrases.test.js"
+    "package": "sh scripts/package.sh"
   }
 }

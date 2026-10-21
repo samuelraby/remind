@@ -16,7 +16,7 @@ const linking = new Set(["on", "to", "in", "into", "onto", "under"]);
 const owning = new Set(["my", "the", "our"]);
 const listWord = /^lists?[.,;:!?)]*$/i;
 
-// "Errands", "Errands", "Errands" and "🛒 Errands" all read as one name.
+// "Side Projects", "SideProjects", "side-projects" and "🛠 Side Projects" all read as one name.
 function normalize(text: string): string {
   return text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 }
