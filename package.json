@@ -2,7 +2,7 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "remind",
   "title": "Remind",
-  "description": "Create a reminder with the macOS date detector and Apple Intelligence. Works offline.",
+  "description": "Create a reminder with the macOS spell checker, date detector and Apple Intelligence. Works offline.",
   "icon": "icon.png",
   "author": "samuel",
   "categories": [
@@ -23,7 +23,7 @@
           "name": "appleIntelligence",
           "title": "Apple Intelligence",
           "label": "Use Apple Intelligence",
-          "description": "Matches list names and rewrites titles that read badly, with the on-device model.",
+          "description": "Matches list names, picks spellings and rewrites titles that read badly, with the on-device model.",
           "type": "checkbox",
           "default": true
         },
@@ -31,9 +31,9 @@
           "name": "fixSpelling",
           "title": "Spelling and Grammar",
           "label": "Correct spelling and grammar",
-          "description": "Corrects spelling and grammar in titles with the on-device model. Needs Apple Intelligence.",
+          "description": "Fixes spelling with the macOS spell checker as you type, and grammar with the on-device model.",
           "type": "checkbox",
-          "default": false
+          "default": true
         },
         {
           "name": "showList",

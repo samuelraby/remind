@@ -1,13 +1,26 @@
 // Finds the dates in a reminder, lists Reminders lists, and adds reminders. Prints JSON.
-// Usage: remind-helper detect <text>
+// Usage: remind-helper detect [--spell] <text>
 //        remind-helper lists
 //        remind-helper add <json>
+import AppKit
 import EventKit
 import Foundation
 
 struct Detection: Encodable {
     let date: Double
     let matched: String
+}
+
+// A word the spell checker flagged but couldn't fix on its own, with what it suggests.
+struct Unsure: Encodable {
+    let word: String
+    let guesses: [String]
+}
+
+struct Reading: Encodable {
+    let text: String
+    let dates: [Detection]
+    let unsure: [Unsure]
 }
 
 struct ReminderList: Encodable {
@@ -41,15 +54,46 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
+// Fixes the words the macOS spell checker is sure of, and lists the ones it isn't.
+func spellCheck(_ text: String) -> (String, [Unsure]) {
+    let checker = NSSpellChecker.shared
+    guard checker.setLanguage("en") else { return (text, []) }
+    let original = text as NSString
+    var fixes: [(NSRange, String)] = []
+    var unsure: [Unsure] = []
+    var start = 0
+    while start < original.length {
+        let range = checker.checkSpelling(of: text, startingAt: start)
+        // The search wraps around to the start, so a match behind the last one means it's done.
+        if range.location == NSNotFound || range.location < start { break }
+        let word = original.substring(with: range)
+        if let fix = checker.correction(forWordRange: range, in: text, language: "en", inSpellDocumentWithTag: 0) {
+            fixes.append((range, fix))
+        } else {
+            let guesses = checker.guesses(forWordRange: range, in: text, language: "en", inSpellDocumentWithTag: 0) ?? []
+            if !guesses.isEmpty { unsure.append(Unsure(word: word, guesses: Array(guesses.prefix(5)))) }
+        }
+        start = range.location + range.length
+    }
+    let fixed = NSMutableString(string: text)
+    for (range, fix) in fixes.reversed() { fixed.replaceCharacters(in: range, with: fix) }
+    return (fixed as String, unsure)
+}
+
 // Every date in the text, in order. Remind combines them, so "today" and "at 5" can come apart.
-func detect(_ text: String) {
+func dates(in text: String) -> [Detection] {
     let detector = try! NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue)
-    let found = detector.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap {
+    return detector.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap {
         match -> Detection? in
         guard let date = match.date, let range = Range(match.range, in: text) else { return nil }
         return Detection(date: date.timeIntervalSince1970 * 1000, matched: String(text[range]))
     }
-    emit(found)
+}
+
+// Spelling comes first, so a fixed "tommorow" is read as a date.
+func detect(_ text: String, spell: Bool) {
+    let (fixed, unsure) = spell ? spellCheck(text) : (text, [])
+    emit(Reading(text: fixed, dates: dates(in: fixed), unsure: unsure))
 }
 
 // Asks once, then needs full access. The answer can arrive on the main queue, so the run loop keeps turning.
@@ -120,8 +164,9 @@ func add(_ json: String) {
 
 let arguments = Array(CommandLine.arguments.dropFirst())
 switch arguments.first {
-case "detect": detect(arguments.dropFirst().joined(separator: " "))
+case "detect" where arguments.dropFirst().first == "--spell": detect(arguments.dropFirst(2).joined(separator: " "), spell: true)
+case "detect": detect(arguments.dropFirst().joined(separator: " "), spell: false)
 case "lists": lists()
 case "add" where arguments.count == 2: add(arguments[1])
-default: fail("Usage: remind-helper detect <text> | lists | add <json>")
+default: fail("Usage: remind-helper detect [--spell] <text> | lists | add <json>")
 }

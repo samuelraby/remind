@@ -1,0 +1,16 @@
+{
+  "required": [
+    "word"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "word": {
+      "type": "string"
+    }
+  },
+  "title": "Spelling",
+  "x-order": [
+    "word"
+  ],
+  "type": "object"
+}

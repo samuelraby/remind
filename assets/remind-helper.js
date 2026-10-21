@@ -1,4 +1,4 @@
-// Remind helper that runs on any Mac: osascript -l JavaScript remind-helper.js detect <text> | lists | add <json>
+// Remind helper that runs on any Mac: osascript -l JavaScript remind-helper.js detect [--spell] <text> | lists | add <json>
 ObjC.import("Foundation");
 ObjC.import("EventKit");
 
@@ -6,8 +6,43 @@ const reminderEntity = 1;
 const fullAccess = 3;
 const frequencies = { daily: 0, weekly: 1, monthly: 2, yearly: 3 };
 
+// Fixes the words the macOS spell checker is sure of, and lists the ones it isn't.
+function spellCheck(text) {
+  ObjC.import("AppKit");
+  const checker = $.NSSpellChecker.sharedSpellChecker;
+  if (!checker.setLanguage("en")) return { text, unsure: [] };
+  const string = $(text);
+  const fixes = [];
+  const unsure = [];
+  let start = 0;
+  while (start < text.length) {
+    const range = checker.checkSpellingOfStringStartingAt(string, start);
+    // Struct fields arrive here as strings ("0"), so convert them to numbers.
+    const location = Number(range.location);
+    const length = Number(range.length);
+    // The search wraps around to the start, so a match behind the last one means it's done.
+    if (length === 0 || location < start) break;
+    const word = text.substr(location, length);
+    const nsRange = { location, length };
+    const fix = checker.correctionForWordRangeInStringLanguageInSpellDocumentWithTag(nsRange, string, "en", 0);
+    if (!fix.isNil()) {
+      fixes.push({ location, length, fix: ObjC.unwrap(fix) });
+    } else {
+      const found = checker.guessesForWordRangeInStringLanguageInSpellDocumentWithTag(nsRange, string, "en", 0);
+      const guesses = found.isNil() ? [] : ObjC.deepUnwrap(found).slice(0, 5);
+      if (guesses.length) unsure.push({ word, guesses });
+    }
+    start = location + length;
+  }
+  let fixed = text;
+  for (const { location, length, fix } of fixes.reverse()) {
+    fixed = fixed.slice(0, location) + fix + fixed.slice(location + length);
+  }
+  return { text: fixed, unsure };
+}
+
 // Every date in the text, in order. Remind combines them, so "today" and "at 5" can come apart.
-function detect(text) {
+function dates(text) {
   const detector = $.NSDataDetector.dataDetectorWithTypesError(8, null);
   const matches = detector.matchesInStringOptionsRange($(text), 0, { location: 0, length: text.length });
   const found = [];
@@ -20,6 +55,12 @@ function detect(text) {
     found.push({ date: Number(match.date.timeIntervalSince1970) * 1000, matched: text.substr(start, length) });
   }
   return found;
+}
+
+// Spelling comes first, so a fixed "tommorow" is read as a date.
+function detect(text, spell) {
+  const checked = spell ? spellCheck(text) : { text, unsure: [] };
+  return { text: checked.text, dates: dates(checked.text), unsure: checked.unsure };
 }
 
 // The script helper can't ask for access, so it needs access granted already.
@@ -83,8 +124,9 @@ function add(json) {
 
 function run(argv) {
   const [command, ...rest] = argv;
-  if (command === "detect") return JSON.stringify(detect(rest.join(" ")));
+  if (command === "detect" && rest[0] === "--spell") return JSON.stringify(detect(rest.slice(1).join(" "), true));
+  if (command === "detect") return JSON.stringify(detect(rest.join(" "), false));
   if (command === "lists") return JSON.stringify(lists());
   if (command === "add" && rest.length === 1) return JSON.stringify(add(rest[0]));
-  throw new Error("Usage: remind-helper.js detect <text> | lists | add <json>");
+  throw new Error("Usage: remind-helper.js detect [--spell] <text> | lists | add <json>");
 }

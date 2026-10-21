@@ -23,8 +23,8 @@ import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { useEffect, useRef, useState } from "react";
 import { findList, findListHint, hintKey } from "./list";
-import { listInstructions, titleInstructions } from "./prompts";
-import { isRough, onlyCorrects, onlyRemovesWords } from "./rough";
+import { listInstructions, spellingInstructions, titleInstructions } from "./prompts";
+import { isRough, onlyFixesGrammar, onlyRemovesWords } from "./rough";
 import { Match, when } from "./when";
 
 interface ReminderList {
@@ -40,6 +40,18 @@ function listLabel(list: ReminderList, lists: ReminderList[]): string {
   return shared && list.account ? `${list.title} (${list.account})` : list.title;
 }
 
+// What the helper read: the text with sure spelling fixes, its dates, and words it wasn't sure of.
+interface Unsure {
+  word: string;
+  guesses: string[];
+}
+
+interface Reading {
+  text: string;
+  dates: Match[];
+  unsure: Unsure[];
+}
+
 interface Draft {
   text: string;
   title: string;
@@ -48,6 +60,7 @@ interface Draft {
   listId: string | null;
   // A list name that isn't one of the person's lists, like "grocery", and the title if no list fits.
   hint: { name: string; title: string } | null;
+  unsure: Unsure[];
 }
 
 interface FormValues {
@@ -76,7 +89,7 @@ const toolchains = [
 const buildScript = 't="$4.building"; "$1" -sdk "$2" -O "$3" -o "$t" && mv -f "$t" "$4" && printf %s "$5" > "$4.source-hash"';
 
 // Dates go stale ("tomorrow"), so detections are kept only while Remind is open.
-const detections = new Map<string, Match[]>();
+const detections = new Map<string, Reading>();
 let sourceHash: string | undefined;
 let fastHelperReady = false;
 let fastHelperBroken = false;
@@ -156,12 +169,19 @@ async function helper(args: string[], timeout = 5000): Promise<string> {
   return run("/usr/bin/osascript", ["-l", "JavaScript", asset("remind-helper.js"), ...args], timeout + 5000);
 }
 
-async function detect(text: string): Promise<Match[]> {
-  const known = detections.get(text);
+// With Spelling and Grammar on, the helper fixes spelling before it reads dates.
+function readingKey(text: string): string {
+  return `${getPreferenceValues<Preferences.Remind>().fixSpelling ? "spell" : "plain"}:${text}`;
+}
+
+async function detect(text: string): Promise<Reading> {
+  const key = readingKey(text);
+  const known = detections.get(key);
   if (known) return known;
-  const found = JSON.parse(await helper(["detect", text])) as Match[];
-  detections.set(text, found);
-  return found;
+  const spell = getPreferenceValues<Preferences.Remind>().fixSpelling ? ["--spell"] : [];
+  const reading = JSON.parse(await helper(["detect", ...spell, text])) as Reading;
+  detections.set(key, reading);
+  return reading;
 }
 
 function readDates(text: string, matches: Match[]) {
@@ -172,7 +192,8 @@ function readDates(text: string, matches: Match[]) {
   );
 }
 
-function draftFor(text: string, matches: Match[], lists: ReminderList[]): Draft {
+function draftFor(reading: Reading, lists: ReminderList[]): Draft {
+  const { text, dates: matches, unsure } = reading;
   const list = findList(text, lists);
   const hinted = list || lists.length === 0 ? null : findListHint(text);
   const picked = hinted ? pickedList(hinted.name, lists) : null;
@@ -191,6 +212,7 @@ function draftFor(text: string, matches: Match[], lists: ReminderList[]): Draft 
     hasTime,
     listId: list?.id ?? picked ?? null,
     hint: hinted ? { name: hinted.name, title: readDates(text, matches).title } : null,
+    unsure,
   };
 }
 
@@ -315,15 +337,28 @@ function askModel(instructions: string, schema: string, prompt: string): Promise
 
 // Rewrites a title. Without spelling and grammar it may only take words out; with it, it may also
 // respell words and add small grammar words. Anything else, or an empty answer, is no rewrite.
-async function rewriteTitle(text: string, fixSpelling: boolean): Promise<string | null> {
-  const answer = await askModel(titleInstructions(fixSpelling), "title-schema.json", `Text: ${text}`);
+async function rewriteTitle(text: string, fixGrammar: boolean): Promise<string | null> {
+  const answer = await askModel(titleInstructions(fixGrammar), "title-schema.json", `Text: ${text}`);
   const said = String(answer.title ?? "")
     .replace(/^(?:reminder|text):\s*/i, "")
     .trim();
-  const allowed = fixSpelling ? onlyCorrects(text, said) : onlyRemovesWords(text, said);
+  const allowed = fixGrammar ? onlyFixesGrammar(text, said) : onlyRemovesWords(text, said);
   if (!allowed) return null;
   // The model doesn't always start with a capital letter, so Remind makes sure.
   return said.charAt(0).toLocaleUpperCase() + said.slice(1);
+}
+
+// Asks the on-device model which of the spell checker's suggestions the person meant. Anything else
+// keeps the word as typed.
+async function pickSpelling(text: string, unsure: Unsure): Promise<string | null> {
+  const prompt = `Text: ${text}. Word: ${unsure.word}. Options: ${unsure.guesses.join(", ")}`;
+  const answer = await askModel(spellingInstructions, "word-schema.json", prompt);
+  const said = String(answer.word ?? "").trim().toLowerCase();
+  return unsure.guesses.find((guess) => guess.toLowerCase() === said) ?? null;
+}
+
+function escaped(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // Asks the on-device model which list a name like "grocery" means. Anything not on the list is no list.
@@ -370,7 +405,11 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
   const hint = draft.hint && !draft.listId ? draft.hint : null;
   // With spelling and grammar on, every title goes to the model; otherwise only rough ones.
   const needsRewrite = (text: string) => fixSpelling || isRough(text);
-  const [isWorking, setIsWorking] = useState(appleIntelligence && (Boolean(hint) || needsRewrite(draft.title)));
+  const unsureIn = (text: string) =>
+    fixSpelling ? draft.unsure.filter((unsure) => new RegExp(`\\b${escaped(unsure.word)}\\b`, "i").test(text)) : [];
+  const [isWorking, setIsWorking] = useState(
+    appleIntelligence && (Boolean(hint) || needsRewrite(draft.title) || unsureIn(draft.title).length > 0),
+  );
 
   useEffect(() => {
     if (!appleIntelligence) return;
@@ -382,22 +421,35 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
       }
       return null;
     };
-    const rewrite = (text: string) =>
-      needsRewrite(text) ? rewriteTitle(text, fixSpelling).catch(warn) : Promise.resolve(null);
+    // Words the spell checker wasn't sure of go to the model first, then grammar or a rough title.
+    const polish = async (text: string): Promise<string | null> => {
+      let next = text;
+      const picks = await Promise.all(unsureIn(text).map((unsure) => pickSpelling(text, unsure).catch(warn)));
+      unsureIn(text).forEach((unsure, index) => {
+        const pick = picks[index];
+        if (!pick) return;
+        next = next.replace(new RegExp(`\\b${escaped(unsure.word)}\\b`, "i"), (typed) =>
+          typed[0] === typed[0].toUpperCase() ? pick.charAt(0).toUpperCase() + pick.slice(1) : pick,
+        );
+      });
+      const rewritten = needsRewrite(next) ? await rewriteTitle(next, fixSpelling).catch(warn) : null;
+      const result = rewritten ?? next;
+      return result === text ? null : result;
+    };
     const known = cachedLists();
     const picking = hint
       ? (known.length > 0 ? Promise.resolve(known) : loadLists()).then((found) => pickList(hint.name, found)).catch(warn)
       : Promise.resolve(null);
 
-    Promise.all([picking, rewrite(draft.title)])
-      .then(async ([picked, rewritten]) => {
-        let next = rewritten;
+    Promise.all([picking, polish(draft.title)])
+      .then(async ([picked, polished]) => {
+        let next = polished;
         if (hint && picked) {
           listPicked.current = true;
           setListId(picked);
         } else if (hint) {
-          // No list fits, so the list words go back into the title, rewritten if they read badly.
-          next = (await rewrite(hint.title)) ?? hint.title;
+          // No list fits, so the list words go back into the title, then get the same polish.
+          next = (await polish(hint.title)) ?? hint.title;
         }
         if (isCurrent && next && !titleEdited.current) showTitle(next);
       })
@@ -545,9 +597,9 @@ function FromText({ text, onEdit }: { text: string; onEdit?: () => void }) {
     const known = cachedLists();
     const lists = known.length > 0 ? Promise.resolve(known) : loadLists().catch(() => []);
     Promise.all([detect(text), lists])
-      .then(([matches, found]) => setDraft(draftFor(text, matches, found)))
+      .then(([reading, found]) => setDraft(draftFor(reading, found)))
       .catch((failure: Error) => {
-        setDraft({ text, title: text, date: null, hasTime: false, listId: null, hint: null });
+        setDraft({ text, title: text, date: null, hasTime: false, listId: null, hint: null, unsure: [] });
         showToast({ style: Toast.Style.Failure, title: "Date Unavailable", message: failure.message });
       });
   }, []);
@@ -568,12 +620,12 @@ export default function Command(props: LaunchProps<{ launchContext: { edit?: boo
 function Search() {
   const { pop } = useNavigation();
   const [searchText, setSearchText] = useState("");
-  const [found, setFound] = useState<{ text: string; matches: Match[] } | null>(null);
+  const [found, setFound] = useState<{ typed: string; reading: Reading } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { lists } = useLists();
   const typed = searchText.trim();
-  const draft = found && typed ? draftFor(found.text, found.matches, lists) : null;
+  const draft = found && typed ? draftFor(found.reading, lists) : null;
   const namedList = draft?.listId ? lists.find((list) => list.id === draft.listId) : undefined;
   const listTitle = namedList ? listLabel(namedList, lists) : undefined;
 
@@ -585,9 +637,9 @@ function Search() {
       return;
     }
     // Text already read, like after a backspace, shows at once with no pause.
-    const known = detections.get(typed);
+    const known = detections.get(readingKey(typed));
     if (known) {
-      setFound({ text: typed, matches: known });
+      setFound({ typed, reading: known });
       setIsLoading(false);
       return;
     }
@@ -595,7 +647,7 @@ function Search() {
     setIsLoading(true);
     const timer = setTimeout(() => {
       detect(typed)
-        .then((matches) => isCurrent && setFound({ text: typed, matches }))
+        .then((reading) => isCurrent && setFound({ typed, reading }))
         .catch((failure: Error) => {
           if (isCurrent) {
             setFound(null);
@@ -635,7 +687,7 @@ function Search() {
                 icon={Icon.Pencil}
                 target={
                   // ↵ before the latest text is read reviews that text, never the one before it.
-                  found?.text === typed ? <Review draft={draft} onEdit={pop} /> : <FromText text={typed} onEdit={pop} />
+                  found?.typed === typed ? <Review draft={draft} onEdit={pop} /> : <FromText text={typed} onEdit={pop} />
                 }
               />
               <ClearCacheAction />
