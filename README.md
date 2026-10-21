@@ -8,13 +8,13 @@ Create a reminder without leaving the keyboard. Remind is a [Tinycast](https://g
 
 Type a reminder, like "pick up dry cleaning friday at 5", and Remind shows the date as you type. Press ↵ to open the review screen, where you can change anything before the reminder is added.
 
-| Shortcut | Action                        |
-| -------- | ----------------------------- |
-| ↵        | Open the review screen        |
-| ⌘↵       | Add the reminder              |
-| ⌘E       | Edit what you typed           |
-| Esc      | Go back                       |
-| ⇧⌫       | Clear the cache               |
+| Shortcut | Action                 |
+| -------- | ---------------------- |
+| ↵        | Open the review screen |
+| ⌘↵       | Add the reminder       |
+| ⌘E       | Edit what you typed    |
+| Esc      | Go back                |
+| ⇧⌫       | Clear the cache        |
 
 ### Lists
 
