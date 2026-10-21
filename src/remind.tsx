@@ -23,7 +23,6 @@ import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { useEffect, useRef, useState } from "react";
 import { findList, findListHint, hintKey } from "./list";
-import { typingFrames, typingStep } from "./typing";
 import { Match, when } from "./when";
 
 interface ReminderList {
@@ -402,40 +401,12 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
   const notesEdited = useRef(false);
   const listChosen = useRef(false);
   const listPicked = useRef(false);
-  // While the new title types in, this is where it's headed, so ⌘↵ never adds half of it.
-  const typingTo = useRef<string | null>(null);
-  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shownTitle = useRef(draft.title);
 
   function showTitle(value: string) {
     shownTitle.current = value;
     setTitle(value);
   }
-
-  function stopTyping() {
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-    typingTimer.current = null;
-    typingTo.current = null;
-  }
-
-  // Rewrites the title a few words at a time, done in about 300 ms.
-  function typeTitle(to: string) {
-    const frames = typingFrames(shownTitle.current, to);
-    if (frames.length === 0) return;
-    typingTo.current = to;
-    const next = (index: number) => {
-      showTitle(frames[index]);
-      if (index + 1 < frames.length) {
-        typingTimer.current = setTimeout(() => next(index + 1), typingStep);
-      } else {
-        typingTimer.current = null;
-        typingTo.current = null;
-      }
-    };
-    next(0);
-  }
-
-  useEffect(() => stopTyping, []);
 
   // A list name that isn't a list goes to the model first; the title follows from what it decides.
   const [isPicking, setIsPicking] = useState(Boolean(draft.hint && !draft.listId && appleIntelligence));
@@ -466,7 +437,7 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
       .then((text) => (isCurrent && text ? writeTitle(text, showNotes) : Promise.reject(null)))
       .then((answer) => {
         if (!isCurrent) return;
-        if (answer.title && !titleEdited.current) typeTitle(answer.title);
+        if (answer.title && !titleEdited.current) showTitle(answer.title);
         if (answer.notes && showNotes && !notesEdited.current) setNotes(answer.notes);
       })
       .catch((failure: Error | null) => {
@@ -495,8 +466,7 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
 
   async function add(values: FormValues) {
     if (isAdding) return;
-    const finalTitle = (typingTo.current ?? title).trim();
-    stopTyping();
+    const finalTitle = title.trim();
     if (!finalTitle) {
       await showToast({ style: Toast.Style.Failure, title: "Add a Title" });
       return;
@@ -543,10 +513,9 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
         title="Title"
         value={title}
         onChange={(value) => {
-          // Tinycast can echo a value Remind set; only a real edit stops the typing.
+          // Tinycast can echo a value Remind set; only a real edit keeps Apple Intelligence's title out.
           if (value === shownTitle.current) return;
           titleEdited.current = true;
-          stopTyping();
           showTitle(value);
         }}
       />
