@@ -418,7 +418,7 @@ function Review({ draft, onEdit }: { draft: Draft; onEdit: () => void }) {
     typingTo.current = null;
   }
 
-  // Types the model's title over the old one in under 150 ms.
+  // Types the model's title over the old one in about 300 ms.
   function typeTitle(to: string) {
     const frames = typingFrames(shownTitle.current, to);
     if (frames.length === 0) return;
