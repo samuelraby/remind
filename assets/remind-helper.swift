@@ -55,6 +55,7 @@ func detect(_ text: String) {
 // Asks once, then needs full access. The answer can arrive on the main queue, so the run loop keeps turning.
 func reminders() -> EKEventStore {
     let store = EKEventStore()
+    if EKEventStore.authorizationStatus(for: .reminder) == .fullAccess { return store }
     if EKEventStore.authorizationStatus(for: .reminder) == .notDetermined {
         let answer = Answer()
         store.requestFullAccessToReminders { _, _ in answer.finished = true }
@@ -66,6 +67,7 @@ func reminders() -> EKEventStore {
     guard EKEventStore.authorizationStatus(for: .reminder) == .fullAccess else {
         fail("Remind needs access to Reminders. Allow it in System Settings › Privacy & Security › Reminders.")
     }
+    // A store made before access was granted may not see the lists, so a new one does.
     return EKEventStore()
 }
 

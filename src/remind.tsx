@@ -193,10 +193,13 @@ function draftFor(text: string, matches: Match[], lists: ReminderList[]): Draft 
 }
 
 // Lists change rarely, so the last ones seen show at once while a fresh copy loads behind them.
+// They load once per open, so the search and the review screen share one request.
 const listCache = new Cache({ namespace: "lists" });
 let listsLoading: Promise<ReminderList[]> | null = null;
+let loadedLists: ReminderList[] | null = null;
 
 function cachedLists(): ReminderList[] {
+  if (loadedLists) return loadedLists;
   try {
     return JSON.parse(listCache.get("lists") ?? "[]") as ReminderList[];
   } catch {
@@ -205,22 +208,26 @@ function cachedLists(): ReminderList[] {
 }
 
 function loadLists(): Promise<ReminderList[]> {
-  listsLoading ??= helper(["lists"], 60000)
-    .then((output) => {
+  listsLoading ??= helper(["lists"], 60000).then(
+    (output) => {
       listCache.set("lists", output);
-      return JSON.parse(output) as ReminderList[];
-    })
-    .finally(() => {
+      loadedLists = JSON.parse(output) as ReminderList[];
+      return loadedLists;
+    },
+    (error: Error) => {
       listsLoading = null;
-    });
+      throw error;
+    },
+  );
   return listsLoading;
 }
 
 function useLists(): { lists: ReminderList[]; failure: string | null; isLoading: boolean } {
   const [lists, setLists] = useState<ReminderList[]>(cachedLists);
   const [failure, setFailure] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(loadedLists === null);
   useEffect(() => {
+    if (loadedLists) return;
     let isCurrent = true;
     loadLists()
       .then((found) => isCurrent && setLists(found))
@@ -505,6 +512,13 @@ function Search() {
     setError(null);
     if (!typed) {
       setFound(null);
+      setIsLoading(false);
+      return;
+    }
+    // Text already read, like after a backspace, shows at once with no pause.
+    const known = detections.get(typed);
+    if (known) {
+      setFound({ text: typed, matches: known });
       setIsLoading(false);
       return;
     }
