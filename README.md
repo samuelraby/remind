@@ -14,7 +14,7 @@ Type a reminder, like "pick up dry cleaning friday at 5", and Remind shows the d
 | ⌘↵       | Add the reminder              |
 | ⌘E       | Edit what you typed           |
 | Esc      | Go back                       |
-| ⇧⌫       | Clear remembered list matches |
+| ⇧⌫       | Clear the cache               |
 
 ### Lists
 
@@ -62,13 +62,47 @@ If Remind doesn't appear when you type **remind**, turn on **Show in launcher** 
 
 ## How it works
 
-Remind reads what you type in three steps.
+Remind reads what you type in three steps. Each step uses fixed rules first. Apple Intelligence only steps in where the rules can't finish the job.
 
-**1. Date and time.** The date detector built into macOS finds days and times, like "friday", "tomorrow at noon" or "in two weeks". Remind reads 24-hour times itself: "at 1700", "17:00", "0930 hrs", or a bare "1700" right after a day or at the start or end of a reminder that names a day. A number after a word like "room" or "$" stays a number. A day without a time is all-day.
+### 1. Date and time
 
-**2. List.** Remind finds a list you name with the word "list". See [Lists](#lists). If the name isn't one of your lists, Apple Intelligence picks the list it fits.
+The date detector built into macOS finds every date in the text, like "friday", "tomorrow at noon" or "in two weeks". Remind combines them, so a day and a time can sit apart: "today get coffee at 5pm".
 
-**3. Title.** Remind takes out the date, the time, the list, "remind me", and an "add" that goes with a list. If what's left still reads badly, Apple Intelligence rewrites it. A title reads badly when it:
+Remind reads 24-hour times itself, because the date detector misses them:
+
+- "at 1700", "by 1700", "before 1700" or "around 1700".
+- "1700 hrs" or "1700 hours".
+- "17:00", for hours 13 to 23 or with a leading zero.
+- A bare "1700" right after a day ("today 1700"), at the start ("1700 today"), or at the start or end of a reminder that names a day.
+
+A number stays a number after "room", "suite", "apt", "unit", "gate", "flight", "order", "ext", "building", "floor", "code", "pin", "zip", "no", "number", "route", "hwy", "highway", "version", "v", "$" or "#", or before "dollars", "bucks", "usd", "calories", "cal", "miles", "mi", "km", "steps", "words", "points" or "pts". A year, like "April 2026", stays a year.
+
+A reminder has a time only when you name one: "am", "pm", "noon", "midnight", "morning", "afternoon", "evening", "tonight", "at 5", "5:30" or a 24-hour time. Otherwise it's all-day.
+
+### 2. List
+
+A list counts when you name it with the word "list", and either:
+
+- "on", "to", "in", "into", "onto" or "under" comes before it, with "my", "the" or "our" optional: "on my Work list".
+- It opens the reminder, after an optional "remind me": "Work list send the deck".
+
+A list whose own name ends in "list", like Reading List, doesn't need the word twice. Names match whatever the capitalization, spacing or symbols. When two names fit, the longer one wins. When lists in two accounts share a name, your default list wins.
+
+If the name isn't one of your lists, Apple Intelligence picks the list it fits. This only happens for the "on", "to" or "in" form, with a name of one to four words that doesn't include "a", "an", "this", "that", "your", "his", "her", "their" or "its". Once you add the reminder, Remind remembers the list for that name.
+
+### 3. Title
+
+Remind takes out, in order:
+
+- Every date and time it read, and the list phrase. A date inside a list's name, like Today, stays part of the list.
+- "add" at the start, when the list comes after "to", "onto" or "into": "add eggs to the Groceries list" gives "eggs".
+- "remind me", "remind me to" and "please remind me" at the start.
+- "on", "at", "by", "for", "in", "due", "before", "around", "this" and "next" left over at the start or end.
+- Stray punctuation at the start or end.
+
+If nothing is left, the title is everything you typed.
+
+If what's left still reads badly, Apple Intelligence rewrites it. A title reads badly when it:
 
 - Starts with "don't forget", "do not forget to", "remember to", "make sure", "I need to", "I have to", "I've got to", "I got to", "I gotta", "I should", "I must", "need to", "have to", "got to", "gotta", "can you", "could you", "would you" or "please".
 - Ends with "after", "before", "with", "to", "from", "about", "and", "or", "the", "a", "an", "of", "until", "during", "than", "but", "so", "my" or "your".
@@ -94,6 +128,33 @@ sudo fm license
 ```
 
 When Apple Intelligence is off, Remind skips both. List names must match a list exactly, and the title is what's left after step 3.
+
+## How the code works
+
+Remind is a Tinycast extension written in TypeScript, with a small Swift helper for the parts only macOS can do.
+
+| File                          | What it does                                                                                  |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
+| `src/remind.tsx`              | The typing screen, the review screen and settings. Calls the helper and Apple Intelligence.   |
+| `src/when.ts`                 | Step 1 and the title cleanup in step 3.                                                       |
+| `src/list.ts`                 | Step 2: finds a list you named, or a name for Apple Intelligence to match.                    |
+| `src/rough.ts`                | Decides when a title reads badly, and checks that a rewrite only took words out.              |
+| `assets/remind-helper.swift`  | Reads dates with the macOS date detector, reads your lists and adds reminders to Reminders.   |
+| `assets/remind-helper.js`     | The same helper as a script, used until the Swift helper is built.                            |
+| `assets/list-schema.json`     | The shape of Apple Intelligence's list answer.                                                |
+| `assets/title-schema.json`    | The shape of Apple Intelligence's title answer.                                               |
+
+The first time Remind runs, it builds the Swift helper in the background with Apple's command line developer tools and keeps it in Tinycast's support folder. Until then, or on a Mac without the tools, the script helper does the same work, a little slower. Remind rebuilds the helper whenever its source changes.
+
+Every helper call is a short process that answers and quits. Apple Intelligence runs through `fm`, the Foundation Models command built into macOS 27, with greedy sampling and a schema, so each answer comes back as structured data. Nothing keeps running when Remind is closed.
+
+Remind keeps three things on your Mac:
+
+- **Your lists**, so they show at once. A fresh copy loads each time Remind opens.
+- **List matches**, like "grocery" to Supermarket.
+- **Dates it has read**, while Remind is open, so going back over text is instant.
+
+⇧⌫ clears all three.
 
 ## Install
 
